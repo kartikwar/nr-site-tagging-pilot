@@ -23,8 +23,11 @@ Your folder should look like this:
 ### **Directory Structure**
 ```plaintext
 CAPSTONE/
-├── data/                         ← place raw PDFs here (outside the repo)
-└── nr-site-tagging-pilot/       ← this repo
+├── data/
+│   ├── input/           ← Raw PDFs go here
+│   ├── output/          ← Renamed + organized PDFs will go here
+│   └── logs/            ← CSV log will go here
+└── nr-site-tagging-pilot/
 ├── main.py
 ├── config.py
 ├── requirements.txt

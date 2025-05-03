@@ -6,8 +6,8 @@ from utils.rename import generate_new_filename
 from utils.classifier import classify_document
 from utils.file_organizer import organize_files
 from utils.llm_interface import query_llm
-import config
 from utils.logger import init_log, log_metadata
+import config
 
 def extract_site_id_from_filename(filename):
     match = re.match(r"^(\d{3,5})\b", filename)
@@ -23,12 +23,13 @@ def main():
     )
     print(f"Using device: {device}")
 
-    pdf_dir = config.PDF_DATA_PATH
-    print(f"Scanning directory: {pdf_dir.resolve()}")
+    input_dir = config.INPUT_DIR
+    output_dir = config.OUTPUT_DIR
+    log_path = config.LOG_PATH
 
-    files = load_pdfs(pdf_dir)
+    print(f"Scanning directory: {input_dir.resolve()}")
+    files = load_pdfs(input_dir)
 
-    log_path = Path("logs") / "metadata_log.csv"
     init_log(log_path, headers=["original_filename", "new_filename", "site_id", "document_type", "output_path"])
 
     if not files:
@@ -62,7 +63,7 @@ def main():
 
         new_filename = generate_new_filename(file_path, site_id=site_id)
         doc_type = classify_document(file_path, {"site_id": site_id})
-        output_path = Path("outputs") / doc_type / new_filename
+        output_path = output_dir / doc_type / new_filename
 
         metadata = {
             "site_id": site_id,
@@ -73,12 +74,12 @@ def main():
 
         organize_files(file_path, output_path)
         log_metadata(log_path, {
-        "original_filename": file_path.name,
-        "new_filename": new_filename,
-        "site_id": site_id,
-        "document_type": doc_type,
-        "output_path": str(output_path)
-    })
+            "original_filename": file_path.name,
+            "new_filename": new_filename,
+            "site_id": site_id,
+            "document_type": doc_type,
+            "output_path": str(output_path)
+        })
 
     print("Pipeline complete.")
 
