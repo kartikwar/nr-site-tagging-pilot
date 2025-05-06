@@ -1,3 +1,11 @@
+import re
+
+def extract_site_id_from_filename(filename):
+    match = re.match(r"^(\d{3,5})\b", filename)
+    if match:
+        return match.group(1)
+    return None
+
 def extract_metadata(file_path):
     """Return dummy metadata."""
     metadata = {

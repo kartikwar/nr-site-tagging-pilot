@@ -24,21 +24,23 @@ Your folder should look like this:
 ```plaintext
 CAPSTONE/
 ├── data/
-│   ├── input/           ← Raw PDFs go here
-│   ├── output/          ← Renamed + organized PDFs will go here
-│   └── logs/            ← CSV log will go here
-└── nr-site-tagging-pilot/
-├── main.py
-├── config.py
-├── requirements.txt
-├── README.md
-├── logs/
-│   └── metadata_log.csv      ← created automatically
-├── outputs/
-│   └── REPORT/
-│       └── renamed files
-└── utils/
-└── helper scripts
+│   ├── input/                  ← Raw PDFs go here
+│   ├── output/                 ← Renamed + organized PDFs will go here
+│   └── logs/                   ← CSV log will go here
+├── nr-site-tagging-pilot/
+│   ├── main.py
+│   ├── config.py
+│   ├── requirements.txt
+│   ├── README.md
+│   ├── prompts/
+│   │   └── metadata_prompt.txt  ← LLM prompt template
+│   ├── logs/
+│   │   └── metadata_log.csv     ← Created automatically
+│   ├── outputs/
+│   │   └── REPORT/
+│   │       └── renamed files
+│   └── utils/                   ← Helper scripts (loader, llm_interface, etc.)
+
 ```
 
 ---
@@ -48,10 +50,17 @@ CAPSTONE/
 1. **Install dependencies**  
 `pip install -r requirements.txt`
 
-2. **Run LLaMA 2 model**  
+2. **Download ollama and install the .exe file** from following https://ollama.com/download/
+
+3. **Install Models**
+`ollama pull llama2`
+
+`ollama run mistral`
+
+4. **Run LLaMA 2 model**  
 `ollama run llama2`
 
-3. **Run the pipeline**  
+5. **Run the pipeline**  
 `python main.py`
 
 ---
