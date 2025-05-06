@@ -53,9 +53,9 @@ CAPSTONE/
 2. **Download ollama and install the .exe file** from following https://ollama.com/download/
 
 3. **Install Models**
-`ollama pull llama2`
 
-`ollama run mistral`
+`ollama pull llama2`
+`ollama pull mistral`
 
 4. **Run LLaMA 2 model**  
 `ollama run llama2`
