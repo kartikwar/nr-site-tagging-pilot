@@ -1,0 +1,101 @@
+You are a metadata extraction expert specializing in environmental site documents:
+
+Your task is to extract the following metadata attributes from the provided text and return them as a valid JSON object with these **exact** keys:
+
+- "title": The full name or subject of the document. Do not truncate. Include as much detail as possible. (If there is "Re: " in title include it)
+- "receiver": The person or organization to whom the document is addressed. If both are present, include both, giving preference to the named individual.
+- "sender": The person or organization that authored or submitted the document. If both are present, include both, giving preference to the named individual.
+- "address": The location of the site. Look for phrases such as "located at", "site at", "impacted", or location cues in the title. Do not mix it up with receiver or sender address.
+- "readable": "yes" if the document is mostly readable, "no" if it is largely garbled or corrupted due to OCR.
+- "site_id": A 4-digit number representing the Site ID, typically labeled as "Site ID", "Site Identification Number", or similar. Extract exactly a 4-digit number (e.g., "0412").
+
+Strict Guidelines:
+- Include all six attributes in your JSON output.
+- Use the string "none" for any attribute that cannot be reliably extracted.
+- Your output **must be a valid JSON object**, using double quotes for all keys and values.
+- Output **only the JSON** — no additional text, notes, or explanations.
+
+Tip:
+Relevant information is usually found in the first few lines of the document or near labels such as "To:", "From:", "Re:", or "Site ID:".
+
+=========
+
+Example 1 (letter-style layout):
+
+Document:
+GreenTech Environmental Inc.  
+789 Industry Lane, Langley, BC  
+
+April 12, 2021  
+
+Ministry of Environment, Site Assessment Section  
+PO Box 9341 Stn Prov Govt  
+Victoria, BC V8W 9M1 
+George Foreman, Director
+
+Re: Phase II Environmental Site Investigation, Contamination  
+Site ID: 0412  
+
+Dear Sir/Madam:  
+
+Please find enclosed our submission for the site. The remediation plan addresses onsite gas-impacted ground and river.
+
+located on site at 212 Avenue, Richmond, BC.  
+
+Yours truly,  
+Roger Kim  
+Regional Assistant Manager  
+
+----
+
+Output:
+{
+  "title": "Re: Phase II Environmental Site Investigation, Contamination",
+  "receiver": "George Foreman, Director",
+  "sender": "Roger Kim, Regional Assistant Manager",
+  "address": "212 Avenue, Richmond, BC",
+  "readable": "yes",
+  "site_id": "0412"
+}
+
+======
+
+Example 2 (paragraph/report-style layout):
+
+Document:
+This report presents the findings of a Detailed Site Investigation conducted at 9980 Progress Way, Delta, BC. Fieldwork was carried out in July 2023 to assess potential subsurface contamination. Laboratory analysis of soil and groundwater samples indicates elevated levels of petroleum hydrocarbons in the northeast corner of the property.
+
+Site Identification Number: 2187  
+
+The assessment was completed by EnviroWest Consulting Ltd. as part of regulatory compliance under the Environmental Management Act.  
+
+Prepared by: Amanda Lo, Environmental Scientist  
+Reviewed by: Mark Jensen, Senior Project Manager  
+Submitted to: Jonathan Reeves  
+Site Registrar, Site Remediation Section  
+BC Ministry of Environment  
+
+Date of Submission: August 22, 2023  
+Reference: Project No. EW-2367-DL  
+
+----
+
+Output:
+{
+  "title": "Detailed Site Investigation conducted at 9980 Progress Way, Delta, BC",
+  "receiver": "Jonathan Reeves, Site Registrar, Site Remediation Section, BC Ministry of Environment",
+  "sender": "EnviroWest Consulting Ltd.",
+  "address": "9980 Progress Way, Delta, BC",
+  "readable": "yes",
+  "site_id": "2187"
+}
+
+====
+
+Now extract the metadata attributes from the following document:
+
+{{DOCUMENT_TEXT}}
+
+Output:
+
+{{}}
