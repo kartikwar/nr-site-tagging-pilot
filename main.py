@@ -5,10 +5,12 @@ from utils.loader import load_pdfs, extract_text_from_pdf, clean_ocr_text
 from utils.rename import generate_new_filename
 from utils.classifier import classify_document
 from utils.file_organizer import organize_files
-from utils.llm_interface import query_llm, load_prompt_template
+from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template
 from utils.logger import init_log, log_metadata
 from utils.metadata_extractor import extract_site_id_from_filename
+from utils.gold_data_extraction import load_gold_data
 import config
+import ollama
 
 
 
@@ -24,7 +26,16 @@ def main():
     input_dir = config.INPUT_DIR
     output_dir = config.OUTPUT_DIR
     log_path = config.LOG_PATH
+    # Main prompt to extract metadata fields
     prompt_path = Path("prompts/metadata_prompt.txt")
+
+    # Additional re-prompts for the LLM, only called if the first pass misses an important field
+    #address_reprompt_path = Path("prompts/address_reprompt.txt")
+    site_id_reprompt_path = Path("prompts/site_id_reprompt")
+
+    # Initialize a dict object to store successfully retrieved site ID - address pairs.
+    # Some documents are missing address, but ground truth address is shared among all docs with same site ID.
+    site_id_address_dict = dict()
 
     print(f"Scanning directory: {input_dir.resolve()}")
     files = load_pdfs(input_dir)
@@ -47,12 +58,25 @@ def main():
         else:
             print("[Fallback to LLM] Site ID not found in filename")
 
-        # Extract only first 5 pages of text
-        text = extract_text_from_pdf(file_path, max_pages=5)
+        # Extract only first 8 pages of text
+        text = extract_text_from_pdf(file_path, max_pages=8)
         
         prompt = load_prompt_template(prompt_path,  clean_ocr_text(text))
         
         metadata_dict = query_llm(prompt, model="mistral")
+
+        # If title extraction fails, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
+        metadata_retries = 0
+        while metadata_dict['title'].lower() == 'none' and metadata_retries<5:
+            print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
+            metadata_dict = query_llm(prompt, model="mistral")
+            metadata_retries += 1
+
+        # If extraction of any other required field fails, call LLM to re-attempt just that field
+        #while metadata_dict['address'].lower() == 'none':
+        #    address_reprompt = load_prompt_template(address_reprompt_path,  clean_ocr_text(text))
+        #    print("Retrying ADDRESS extraction...")
+        #    metadata_dict['address'] = llm_single_field_query(address_reprompt, model="mistral")
 
         # Extract site id values
         llm_site_id = metadata_dict.get("site_id", "none")
@@ -63,16 +87,38 @@ def main():
         elif not site_id and llm_site_id != "none":
             site_id = llm_site_id
             print(f"[Site ID FROM LLM] {site_id}")
-        elif not site_id:
-            site_id = "UNKNOWN"
+        #elif not site_id:
+        #    site_id = "UNKNOWN"
 
+        # Make up to 5 re-attempts to extract site_id
+        site_id_retries = 0
+        while not site_id and site_id_retries < 5:
+            print(f"Retrying Site ID extraction, attempt {site_id_retries + 1}/5")
+            site_id_reprompt = load_prompt_template(site_id_reprompt_path, clean_ocr_text(text))
+            site_id = llm_single_field_query(site_id_reprompt)
+            site_id_retries += 1
             
-        #new_filename = generate_new_filename(file_path, site_id=site_id)
+        # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
+        if metadata_dict['address'].lower() != 'none':
+            if site_id_address_dict.get(site_id) is None:
+                site_id_address_dict[site_id] = metadata_dict['address']
+
+        # If no address is extracted but we have previously extracted an address, re-use it.
+        elif site_id_address_dict.get(site_id) is not None:
+            print(f"Address not found in document. Re-using previously extracted address from site_id: {site_id}")
+            metadata_dict['address'] = site_id_address_dict[site_id]
+                #new_filename = generate_new_filename(file_path, site_id=site_id)
+
         doc_type = classify_document(file_path, {"site_id": site_id})
         #output_path = output_dir / doc_type / new_filename
 
-        print("metadata response: ", metadata_dict)
+        print("\nmetadata response:\n", metadata_dict)
         print("final site id: ", site_id)
+        gold_data = load_gold_data(filename, 'clean_metadata.csv')
+        print("\ngold response:\n", gold_data)
+        print('\n----\n')
+
+
         
         #organize_files(file_path, output_path)
         # log_metadata(log_path, {
