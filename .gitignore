@@ -1,1 +1,9 @@
+# Ignore Python cache directories
+__pycache__/
+utils/__pycache__/
+
+# Ignore specific CSV file
+clean_metadata.csv
+
+# Ignore best model
 best_model/

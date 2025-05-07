@@ -2,12 +2,12 @@ You are a metadata extraction expert specializing in environmental site document
 
 Your task is to extract the following metadata attributes from the provided text and return them as a valid JSON object with these **exact** keys:
 
-- "title": The full name or subject of the document. Do not truncate. Include as much detail as possible. (If there is "Re: " in title include it)
+- "title": The full name or subject of the document. Do not truncate. Include as much detail as possible. If "Re: " appears in the title, include it.
 - "receiver": The person or organization to whom the document is addressed. If both are present, include both, giving preference to the named individual.
 - "sender": The person or organization that authored or submitted the document. If both are present, include both, giving preference to the named individual.
-- "address": The location of the site. Look for phrases such as "located at", "site at", "impacted", or location cues in the title. Do not mix it up with receiver or sender address.
+- "address": The location of the site. Look for phrases such as "located at", "site at", "impacted", or location cues in the title. Include ONLY the site address - not any other addresses (eg. the address of the receiver or sender).
 - "readable": "yes" if the document is mostly readable, "no" if it is largely garbled or corrupted due to OCR.
-- "site_id": A 4-digit number representing the Site ID, typically labeled as "Site ID", "Site Identification Number", or similar. Extract exactly a 4-digit number (e.g., "0412").
+- "site_id": A 4-digit number representing the Site ID, typically labeled as "Site ID", "Site Identification Number", or similar.  Extract exactly a 4-digit number (e.g., "0412").
 
 Strict Guidelines:
 - Include all six attributes in your JSON output.
@@ -92,9 +92,68 @@ Output:
 
 ====
 
+Example 3 (Memo-style)
+Document:
+
+Vancouver File #: 2999-02/ 9999
+
+Re: CONDITIONAL CERTIFICATE OF CONDUCT
+ {Pursuant to Section 99.9 of the School Management Act}
+ TECHNICAL REVIEW; April 20, 2026
+ REQUEST FOR A CONDITIONAL CERTIFICATE OF CONDUCT
+
+Site: Vancouver, BC, 1294 Rainbow Road
+Applicant: Brighton College, Vancouver, BC V671S9
+ Contact: John Smith
+ Phone: (XXX) XXX-XXXX
+ Facsimile: (XXX) XXX-XXXX
+Agent:  DataSystems (Canada) Ltd.
+ 201, 4000 Placeholder Road
+ Vancouver, BC VI2 329
+ Contact: Allan Rick
+ Phone: (XXX) XXX-XXX
+ Facsimile: (XXX) XXX-XXXX
+Property Owner:
+Vancouver Schoolboard Trustees
+ School District #99 
+2900 Dukes Road
+ Vancouver, BC VPX 5X7
+
+ASSESSMENT AND RECOMMENDATION
+ • The conduct assessment indicated that there are no unacceptable conduct issues.
+ • The review for risk assessments indicated that there are no unacceptable 
+risks.
+ • Recommend implementation of a followup plan for the proposed 
+development plans.
+
+George Constance, Ph.D.
+ Regulatory Body, Conduct Unit
+ Approved by:
+ Signature:.
+ Bradley Puller, Ph.D.
+ Head - Danger unit
+ Date
+
+----
+
+Output:
+
+{
+  "title": "Re: Conditional Certificate of Conduct - Technical Review; April 20, 2026",
+  "receiver": "Brighton College",
+  "sender": "George Constance, Regulatory Body, Conduct Unit",
+  "address": "1294 Rainbow Road, Vancouver, BC",
+  "readable": "yes",
+  "site_id": "9999"
+}
+
+====
+
 Now extract the metadata attributes from the following document:
 
 {{DOCUMENT_TEXT}}
+
+----
 
 Output:
 
