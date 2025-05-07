@@ -4,7 +4,7 @@ This folder contains all modular helper scripts used by the main document classi
 
 ---
 
-## 🔧 Module Descriptions
+## Module Descriptions
 
 ### `__init__.py`
 Marks this folder as a Python package. Can be left empty.
