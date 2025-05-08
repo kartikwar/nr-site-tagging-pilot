@@ -7,52 +7,74 @@ This folder contains all modular helper scripts used by the main document classi
 ## Module Descriptions
 
 ### `__init__.py`
-Marks this folder as a Python package. Can be left empty.
+- Marks this folder as a Python package. Can be left empty.
 
 ---
 
 ### `classifier.py`
 - Classifies a document’s type (e.g., REPORT, PSI, CORR).
-- Uses regex-based keyword matching on filenames and text.
-- Future versions may include trained classifiers.
+- Uses regex-based keyword matching on filenames and/or extracted text.
+- May be extended in future versions to use trained models.
 
 ---
 
 ### `file_organizer.py`
-- Copies a file into `outputs/{DOC_TYPE}/` using its new standardized filename.
-- Ensures output folders are created automatically.
+- Copies a file into `data/output/{DOC_TYPE}/` using its new standardized filename.
+- Automatically creates output directories if they don’t exist.
+- Designed to keep output files separate from the input dataset and repository.
 
 ---
 
 ### `llm_interface.py`
-- Interfaces with Ollama to send prompts to a quantized LLaMA 2 model running locally.
-- Used to extract the site ID if it’s missing from the filename.
-- Uses few-shot prompting for structured, predictable output.
+- Interfaces with Ollama to send prompts to a local quantized LLaMA 2 or Mistral model.
+- Used to extract metadata fields like site ID, title, sender, and address.
+- Supports both structured (JSON) and single-field prompting.
+- Includes re-prompt logic for fallback cases when key fields are missing.
 
 ---
 
 ### `loader.py`
-- Loads `.pdf` files from the `data/` directory (located one level up from the repo).
-- Uses PyMuPDF to extract text content from each PDF.
-- Returns file paths and extracted text for downstream processing.
+- Loads `.pdf` files from the input directory (`data/input/`).
+- Uses PyMuPDF (`fitz`) to extract and clean text content.
+- Also includes OCR cleanup utilities to improve prompt readability.
 
 ---
 
 ### `logger.py`
-- Handles logging to a central CSV file: `logs/metadata_log.csv`.
-- Logs original filename, new filename, site ID, document type, and output path.
-- Supports creating the CSV file if it doesn’t already exist.
+- Logs structured metadata for each processed file to `logs/metadata_log.csv`.
+- Supports logging fields including:
+  - Original and new filename
+  - Site ID
+  - Document type
+  - Title, sender, receiver, address
+  - Readability flag
+  - Output file path
+- Creates the log file and headers if missing.
 
 ---
 
-### `metadata_rules.py`
-- Placeholder for future rule-based metadata extraction logic.
-- Intended to extract structured fields like `address`, `sender`, and `receiver`.
-- Currently returns hardcoded placeholders (`"Unknown"` or `"N/A"`).
+### `metadata_extractor.py`
+- Extracts the site ID from a filename using regex.
+- Returns a 3–5 digit number if found at the start of the filename.
+- Used as the first-pass method before querying the LLM for site ID.
+
+---
+
+### `gold_data_extraction.py`
+- Loads gold-standard metadata from `clean_metadata.csv`.
+- Matches records using the filename (typically mapped to folder names).
+- Used in the pipeline to compare predicted metadata to the official ground truth.
 
 ---
 
 ### `rename.py`
-- Generates a new standardized filename using date, site ID, and document type.
-- Format: `YYYY-MM-DD – SITE_ID – TYPE.pdf`
-- Does **not** modify the original file — just returns the new filename string.
+- Generates standardized output filenames in the format:
+  `YYYY-MM-DD – SITE_ID – TYPE.pdf`
+- Site ID and document type are injected based on earlier steps.
+- Does **not** modify or move the file itself — just returns the new name string.
+
+---
+
+### `metadata_rules.py`
+- **[Deprecated]** Placeholder for future rule-based metadata extraction.
+- Not currently used in the active pipeline.
