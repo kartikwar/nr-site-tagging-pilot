@@ -4,16 +4,17 @@ This project automates the classification, renaming, and metadata extraction of 
 
 ---
 
-## How It Works
-
 For each PDF in the input folder:
 
-1. Extract the **site ID** from the filename or fall back to **LLM (LLaMA 2 via Ollama)**.
-2. Classify the document type (e.g., REPORT, CORR, PSI).
-3. Generate a clean filename:  
+1. Extract the **Site ID** from the filename using regex, or fall back to **LLM (Mistral via Ollama)**.
+2. Use a **document classifier** to assign a type (e.g., REPORT, PSI, CORR):
+   - Default: regex-based keyword matcher
+   - Optional: ML-based BERT model (Hugging Face)
+3. Generate a standardized filename:  
    `YYYY-MM-DD – SITE_ID – TYPE.pdf`
-4. Copy the renamed file into `outputs/TYPE/`.
-5. Log metadata to `logs/metadata_log.csv`.
+4. Copy the renamed file into `data/output/{TYPE}/`
+5. Log extracted metadata to `logs/metadata_log.csv`
+6. Optionally compare results to a gold-standard metadata CSV for validation
 
 ---
 
@@ -32,14 +33,14 @@ CAPSTONE/
 │   ├── config.py
 │   ├── requirements.txt
 │   ├── README.md
+│   ├── CODE_OF_CONDUCT.md
+│   ├── CONTRIBUTING.md
+│   ├── LICENSE.txt
 │   ├── prompts/
 │   │   └── metadata_prompt.txt  ← LLM prompt template
-│   ├── logs/
-│   │   └── metadata_log.csv     ← Created automatically
-│   ├── outputs/
-│   │   └── REPORT/
-│   │       └── renamed files
-│   └── utils/                   ← Helper scripts (loader, llm_interface, etc.)
+│   │   └── address_reprompt.txt
+│   │   └── site_id_reprompt.txt
+│   └── utils/                   ← Helper scripts (see internal README)
 
 ```
 
@@ -80,7 +81,8 @@ Each processed PDF will appear in `outputs/TYPE/` with a new standardized filena
 ## Notes
 
 - Raw PDFs are never modified
-- LLMs are used only if site ID is missing from filename
+- The LLM is only used when metadata is incomplete or ambiguous
 - Document types are inferred using keyword matching
+- To use the ML classifier, set USE_ML_CLASSIFIER = True in main.py
 
 This is an early prototype to demonstrate pipeline automation and reproducibility.

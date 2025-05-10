@@ -12,7 +12,18 @@ from utils.gold_data_extraction import load_gold_data
 import config
 import ollama
 
+# Toggle this to enable ML-based classification (if model is available)
+USE_ML_CLASSIFIER = False
 
+# Optional: load Hugging Face model if ML mode is enabled
+if USE_ML_CLASSIFIER:
+    from utils.classifier import load_huggingface_model
+    try:
+        load_huggingface_model("your-org/your-model-name")
+        print("[ML Classifier] Model loaded from Hugging Face.")
+    except Exception as e:
+        print(f"[ML Classifier] Failed to load model: {e}")
+        USE_ML_CLASSIFIER = False
 
 def main():
     
@@ -40,10 +51,10 @@ def main():
     print(f"Scanning directory: {input_dir.resolve()}")
     files = load_pdfs(input_dir)
 
-    # init_log(log_path, headers=[
-    #     "original_filename", "new_filename", "site_id", "document_type", "title", 
-    #     "receiver", "sender", "address", "readable", "output_path"
-    # ])
+    init_log(log_path, headers=[
+        "original_filename", "new_filename", "site_id", "document_type", "title", 
+        "receiver", "sender", "address", "readable", "output_path"
+    ])
 
     if not files:
         print("No PDF files found.")
@@ -78,25 +89,32 @@ def main():
         #    print("Retrying ADDRESS extraction...")
         #    metadata_dict['address'] = llm_single_field_query(address_reprompt, model="mistral")
 
-        # Extract site id values
+        # Extract site id values only if needed
         llm_site_id = metadata_dict.get("site_id", "none")
 
-        # Compare and decide which to use
-        if site_id and llm_site_id != "none" and site_id != llm_site_id:
-            print(f"[Site ID MISMATCH] Filename: {site_id}, LLM: {llm_site_id} — using filename version")
-        elif not site_id and llm_site_id != "none":
-            site_id = llm_site_id
-            print(f"[Site ID FROM LLM] {site_id}")
-        #elif not site_id:
-        #    site_id = "UNKNOWN"
+        # Only evaluate LLM site ID if filename did not provide a valid one
+        if not site_id:
+            if not re.fullmatch(r"\d{3,5}", llm_site_id):
+                print(f"[Rejected LLM Site ID] {llm_site_id} — invalid format")
+                llm_site_id = "none"
+            else:
+                print(f"[Validated LLM Site ID] {llm_site_id}")
+                site_id = llm_site_id
+                print(f"[Site ID FROM LLM] {site_id}")
 
         # Make up to 5 re-attempts to extract site_id
         site_id_retries = 0
         while not site_id and site_id_retries < 5:
             print(f"Retrying Site ID extraction, attempt {site_id_retries + 1}/5")
             site_id_reprompt = load_prompt_template(site_id_reprompt_path, clean_ocr_text(text))
-            site_id = llm_single_field_query(site_id_reprompt)
-            site_id_retries += 1
+            proposed_site_id = llm_single_field_query(site_id_reprompt)
+            if re.fullmatch(r"\d{3,5}", proposed_site_id):
+                site_id = proposed_site_id
+                print(f"[Re-prompted Valid Site ID] {site_id}")
+                break
+            else:
+                print(f"[Re-prompted Invalid Site ID] {proposed_site_id}")
+                site_id_retries += 1
             
         # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
         if metadata_dict['address'].lower() != 'none':
@@ -107,32 +125,35 @@ def main():
         elif site_id_address_dict.get(site_id) is not None:
             print(f"Address not found in document. Re-using previously extracted address from site_id: {site_id}")
             metadata_dict['address'] = site_id_address_dict[site_id]
-                #new_filename = generate_new_filename(file_path, site_id=site_id)
+        
+        # Now get document type
+        doc_type = classify_document(file_path, {"site_id": site_id, "title": metadata_dict.get("title", "")}, mode="ml" if USE_ML_CLASSIFIER else "regex")
+        # Generate filename after doc_type is available
+        new_filename = generate_new_filename(file_path, site_id=site_id, doc_type=doc_type)
 
-        doc_type = classify_document(file_path, {"site_id": site_id})
-        #output_path = output_dir / doc_type / new_filename
+        output_path = output_dir / doc_type / new_filename
 
-        print("\nmetadata response:\n", metadata_dict)
-        print("final site id: ", site_id)
-        gold_data = load_gold_data(filename, 'clean_metadata.csv')
-        print("\ngold response:\n", gold_data)
-        print('\n----\n')
+        # print("\nmetadata response:\n", metadata_dict)
+        # print("final site id: ", site_id)
+        # gold_data = load_gold_data(filename, 'clean_metadata.csv')
+        # print("\ngold response:\n", gold_data)
+        # print('\n----\n')
 
 
         
-        #organize_files(file_path, output_path)
-        # log_metadata(log_path, {
-        #     "original_filename": file_path.name,
-        #     "new_filename": new_filename,
-        #     "site_id": site_id,
-        #     "document_type": doc_type,
-        #     "title": metadata_dict.get("title", "none"),
-        #     "receiver": metadata_dict.get("receiver", "none"),
-        #     "sender": metadata_dict.get("sender", "none"),
-        #     "address": metadata_dict.get("address", "none"),
-        #     "readable": metadata_dict.get("readable", "no"),
-        #     "output_path": str(output_path)
-        # })
+        organize_files(file_path, output_path)
+        log_metadata(log_path, {
+            "original_filename": file_path.name,
+            "new_filename": new_filename,
+            "site_id": site_id,
+            "document_type": doc_type,
+            "title": metadata_dict.get("title", "none"),
+            "receiver": metadata_dict.get("receiver", "none"),
+            "sender": metadata_dict.get("sender", "none"),
+            "address": metadata_dict.get("address", "none"),
+            "readable": metadata_dict.get("readable", "no"),
+            "output_path": str(output_path)
+        })
 
 
     print("Pipeline complete.")
