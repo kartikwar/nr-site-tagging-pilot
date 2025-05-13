@@ -2,3 +2,4 @@ torch
 PyMuPDF
 ollama
 pandas
+rouge-score

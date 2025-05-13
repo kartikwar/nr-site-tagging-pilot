@@ -22,12 +22,15 @@ For each PDF in the input folder:
 
 Your folder should look like this:
 ### **Directory Structure**
+
 ```plaintext
 CAPSTONE/
 ├── data/
-│   ├── input/                  ← Raw PDFs go here
-│   ├── output/                 ← Renamed + organized PDFs will go here
-│   └── logs/                   ← CSV log will go here
+│   ├── input/                    ← Raw PDFs go here
+│   ├── output/                   ← Renamed + organized PDFs will go here
+│   ├── logs/                     ← CSV log will go here
+│   └── lookups/                  ← Required lookup/reference files
+│       └── site_registry_mapping.xlsx  ← REQUIRED: Document type to release eligibility mapping
 ├── nr-site-tagging-pilot/
 │   ├── main.py
 │   ├── config.py
@@ -43,6 +46,19 @@ CAPSTONE/
 │   └── utils/                   ← Helper scripts (see internal README)
 
 ```
+---
+
+REQUIRED LOOKUP FILES
+
+The following file must be placed inside the data/lookups/ directory **before running the pipeline**:
+
+1. site_registry_mapping.xlsx  
+   - Purpose: Determines whether a document is publicly releasable based on its type.  
+   - Columns:
+     • Document_Type  
+     • Site_Registry_Releaseable (values must be "yes" or "no")
+
+This file is mandatory. The pipeline will not run if it is missing.
 
 ---
 
@@ -68,13 +84,20 @@ CAPSTONE/
 
 ## Output
 
-Each processed PDF will appear in `outputs/TYPE/` with a new standardized filename. A CSV log is created at `logs/metadata_log.csv` with:
+Each processed PDF will appear in `outputs/Site ID/TYPE/` with a new standardized filename. A CSV log is created at `logs/metadata_log.csv` with:
 
-- Original filename  
-- New filename  
-- Site ID  
-- Document type  
-- Output path
+- Original_Filename            → Name of the original input PDF
+- New_Filename                 → Standardized renamed file
+- Site_id                      → 4-digit Site ID (from filename or LLM)
+- Document_Type                → Classified type of the document
+- Site_Registry_Releaseable    → "yes", "no" or "no (duplicate)", if ready for public release
+- Title                        → Full document or report title
+- Receiver                     → Person or organization the document is addressed to
+- Sender                       → Person or organization that authored/submitted the document
+- Address                      → Site or project location
+- Duplicate                    → "yes" if flagged as a duplicate, otherwise "no"
+- Readable                     → "yes" if the document was mostly readable, otherwise "no"
+- Output_Path                  → Full path to the renamed file in the output directory
 
 ---
 
