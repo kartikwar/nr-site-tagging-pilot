@@ -20,10 +20,18 @@ DOCUMENT_TYPES = {
     "REPORT": ["remediation", "report", "summary", "investigation"],
 }
 
-def load_huggingface_model(model_name="your-org/your-model-name"):
+class_names = [
+    'AIP', 'COA', 'COC', 'CORR', 'COV', 'CSSA', 'DSI', 'FDET', 'IMG', 'MAP',
+    'NIRI', 'OTHERS', 'PDET', 'PSI', 'RA', 'RPT', 'SP', 'SSI', 'Site Registry',
+    'TITLE', 'TMEMO'
+]
+
+
+def load_huggingface_model(model_name):
     global hf_tokenizer, hf_model
     hf_tokenizer = AutoTokenizer.from_pretrained(model_name)
     hf_model = AutoModelForSequenceClassification.from_pretrained(model_name)
+
 
 def classify_document(file_path, metadata=None, mode="regex"):
     """
@@ -33,8 +41,10 @@ def classify_document(file_path, metadata=None, mode="regex"):
         try:
             return classify_with_ml(file_path, metadata)
         except Exception as e:
-            print(f"[ML fallback] Classification failed: {e}. Falling back to regex.")
+            print(
+                f"[ML fallback] Classification failed: {e}. Falling back to regex.")
     return classify_with_regex(file_path)
+
 
 def classify_with_regex(file_path):
     """
@@ -48,22 +58,21 @@ def classify_with_regex(file_path):
                 return doc_type
     return "REPORT"  # default fallback if nothing matches
 
+
 def classify_with_ml(file_path, metadata=None):
     """
     Classify document using a fine-tuned Hugging Face transformer model.
     """
     if hf_tokenizer is None or hf_model is None:
-        raise ValueError("Hugging Face model not loaded. Call load_huggingface_model() first.")
+        raise ValueError(
+            "Hugging Face model not loaded. Call load_huggingface_model() first.")
 
     title = metadata.get("title", "").strip()
-    if not title:
-        return "REPORT"
 
-    inputs = hf_tokenizer(title, return_tensors="pt", truncation=True, padding=True, max_length=64)
+    inputs = hf_tokenizer(title, return_tensors="pt",
+                          truncation=True, padding=True, max_length=64)
     with torch.no_grad():
         outputs = hf_model(**inputs)
         predicted_class = torch.argmax(outputs.logits, dim=1).item()
 
-    if label_encoder:
-        return label_encoder.inverse_transform([predicted_class])[0]
-    return str(predicted_class)  # fallback if no label map
+    return class_names[predicted_class]
