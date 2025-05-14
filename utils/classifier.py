@@ -41,7 +41,7 @@ def classify_document(file_path, device, metadata=None, mode="regex"):
     """
     if mode == "ml":
         try:
-            return classify_with_ml(file_path, device, metadata)
+            return classify_with_ml(device, metadata)
         except Exception as e:
             print(
                 f"[ML fallback] Classification failed: {e}. Falling back to regex.")
@@ -61,7 +61,7 @@ def classify_with_regex(file_path):
     return "REPORT"  # default fallback if nothing matches
 
 
-def classify_with_ml(file_path, device, metadata=None):
+def classify_with_ml(device, metadata=None):
     """
     Classify document using a fine-tuned Hugging Face transformer model.
     """
