@@ -18,6 +18,17 @@ This folder contains all modular helper scripts used by the main document classi
 
 ---
 
+### `checks.py`
+- Performs startup verification for required files and directories.
+- `verify_required_files()`:
+  - Ensures all required lookup files (e.g., Excel configs) exist before pipeline runs.
+  - Fails fast with clear error messages if any file is missing.
+- `verify_required_dirs()`:
+  - Ensures necessary directories (e.g., `data/input/`, `data/output/`) are present.
+  - Fails cleanly if folders are missing and provides actionable messaging.
+
+---
+
 ### `file_organizer.py`
 - Copies a file into `data/output/{DOC_TYPE}/` using its new standardized filename.
 - Automatically creates output directories if they don’t exist.
@@ -57,6 +68,9 @@ This folder contains all modular helper scripts used by the main document classi
 - Extracts the site ID from a filename using regex.
 - Returns a 3–5 digit number if found at the start of the filename.
 - Used as the first-pass method before querying the LLM for site ID.
+- Provides duplicate detection using ROUGE-1 similarity between current text and previous documents under the same site ID.
+- Supports configurable thresholding and ROUGE metric selection.
+- Extracts document release eligibility by matching document types to a preloaded Excel lookup (`site_registry_mapping.xlsx`).
 
 ---
 

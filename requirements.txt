@@ -3,3 +3,5 @@ PyMuPDF
 ollama
 pandas
 rouge-score
+rapidfuzz
+openpyxl

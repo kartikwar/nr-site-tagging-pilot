@@ -7,8 +7,10 @@ from utils.classifier import classify_document
 from utils.file_organizer import organize_files
 from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template
 from utils.logger import init_log, log_metadata
-from utils.metadata_extractor import extract_site_id_from_filename, check_duplicate_by_rouge
+from utils.metadata_extractor import extract_site_id_from_filename, check_duplicate_by_rouge, get_site_registry_releasable
 from utils.gold_data_extraction import load_gold_data
+from utils.site_id_to_address import get_site_address
+from utils.checks import verify_required_files, verify_required_dirs
 import config
 import ollama
 
@@ -26,6 +28,28 @@ if USE_ML_CLASSIFIER:
         USE_ML_CLASSIFIER = False
 
 def main():
+
+    input_dir = config.INPUT_DIR
+    output_dir = config.OUTPUT_DIR
+    log_path = config.LOG_PATH
+    lookups_path = config.LOOKUPS_PATH
+    
+
+    # Directory and Lookup File checks, if they do not exist program shuts down gracefully
+    required_files = [
+        lookups_path / "site_registry_mapping.xlsx",
+        lookups_path / "site_ids.csv"
+    ]
+    
+    required_dirs = [
+        input_dir,
+        output_dir,
+        lookups_path,
+    ]
+
+    verify_required_dirs(required_dirs)
+    verify_required_files(required_files)
+    
     
     device = (
         torch.device("mps") if torch.backends.mps.is_available()
@@ -34,10 +58,7 @@ def main():
     )
     print(f"Using device: {device}")
 
-    input_dir = config.INPUT_DIR
-    output_dir = config.OUTPUT_DIR
-    log_path = config.LOG_PATH
-    
+
     # Main prompt to extract metadata fields
     prompt_path = Path("prompts/metadata_prompt.txt")
 
@@ -75,23 +96,24 @@ def main():
         text = clean_ocr_text(text)
         
         prompt = load_prompt_template(prompt_path,  text)
-        
-        # metadata_dict = query_llm(prompt, model="mistral")
 
-        # # If title extraction fails, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
-        # metadata_retries = 0
-        # while metadata_dict['title'].lower() == 'none' and metadata_retries<5:
-        #     print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
-        #     metadata_dict = query_llm(prompt, model="mistral")
-        #     metadata_retries += 1
+        # Querying LLM to extract metadata attributes
+        metadata_dict = query_llm(prompt, model="mistral")
 
-        # # If extraction of any other required field fails, call LLM to re-attempt just that field
-        # #while metadata_dict['address'].lower() == 'none':
-        # #    address_reprompt = load_prompt_template(address_reprompt_path,  clean_ocr_text(text))
-        # #    print("Retrying ADDRESS extraction...")
-        # #    metadata_dict['address'] = llm_single_field_query(address_reprompt, model="mistral")
+        # If title extraction fails, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
+        metadata_retries = 0
+        while metadata_dict['title'].lower() == 'none' and metadata_retries<5:
+            print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
+            metadata_dict = query_llm(prompt, model="mistral")
+            metadata_retries += 1
 
-        # Extract site id values only if needed
+        # If extraction of any other required field fails, call LLM to re-attempt just that field
+        #while metadata_dict['address'].lower() == 'none':
+        #    address_reprompt = load_prompt_template(address_reprompt_path,  clean_ocr_text(text))
+        #    print("Retrying ADDRESS extraction...")
+        #    metadata_dict['address'] = llm_single_field_query(address_reprompt, model="mistral")
+
+        #Extract site id values only if needed
         llm_site_id = metadata_dict.get("site_id", "none")
 
         # Only evaluate LLM site ID if filename did not provide a valid one
@@ -117,8 +139,14 @@ def main():
             else:
                 print(f"[Re-prompted Invalid Site ID] {proposed_site_id}")
                 site_id_retries += 1
+
+        # Get address from site ID - address CSV, use this preferentially if it exists in the CSV 
+        try:
+            metadata_dict['address'] = get_site_address(csv_path='../data/lookups/site_ids.csv', site_id=int(site_id))
+        except:
+            print(f"Address for site ID {site_id} not found in CSV registry! Defaulting to LLM-extracted address.")
             
-        # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
+        # # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
         if metadata_dict['address'].lower() != 'none':
             if site_id_address_dict.get(site_id) is None:
                 site_id_address_dict[site_id] = metadata_dict['address']
@@ -142,7 +170,7 @@ def main():
         # print('\n----\n')
 
 
-        # Duplicate checking
+        # Duplicate check
         site_folder_path = output_dir / site_id
         duplicate = check_duplicate_by_rouge(
             current_text=clean_ocr_text(text),
@@ -151,8 +179,17 @@ def main():
             rouge_metric="rouge1"
         )
 
+       
+
+        # Site registry Releasable Check
+        if duplicate == "yes":
+            releasable = "No (duplicate)"
+        else:
+            releasable = get_site_registry_releasable(doc_type, lookups_path / "site_registry_mapping.xlsx")
+
         print("final site id: ", site_id, filename)
         print("duplicate: ", duplicate)
+        print("Site registry Releasable Check: ", releasable)
         
         #organize_files(file_path, output_path)
         # log_metadata(log_path, {

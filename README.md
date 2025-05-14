@@ -26,11 +26,12 @@ Your folder should look like this:
 ```plaintext
 CAPSTONE/
 ├── data/
-│   ├── input/                    ← Raw PDFs go here
-│   ├── output/                   ← Renamed + organized PDFs will go here
-│   ├── logs/                     ← CSV log will go here
-│   └── lookups/                  ← Required lookup/reference files
-│       └── site_registry_mapping.xlsx  ← REQUIRED: Document type to release eligibility mapping
+│   ├── input/                                      ← Raw PDFs go here
+│   ├── output/                                     ← Renamed + organized PDFs will go here
+│   ├── logs/                                       ← CSV log will go here
+│   └── lookups/                                    ← Required lookup/reference files
+│       └── site_registry_mapping.xlsx              ← REQUIRED: Document type to release eligibility mapping
+│       └── site_ids.csv                            ← REQUIRED: Site ID to Address mapping
 ├── nr-site-tagging-pilot/
 │   ├── main.py
 │   ├── config.py
@@ -40,10 +41,10 @@ CAPSTONE/
 │   ├── CONTRIBUTING.md
 │   ├── LICENSE.txt
 │   ├── prompts/
-│   │   └── metadata_prompt.txt  ← LLM prompt template
+│   │   └── metadata_prompt.txt                     ← LLM prompt template
 │   │   └── address_reprompt.txt
 │   │   └── site_id_reprompt.txt
-│   └── utils/                   ← Helper scripts (see internal README)
+│   └── utils/                                      ← Helper scripts (see internal README)
 
 ```
 ---
@@ -57,6 +58,9 @@ The following file must be placed inside the data/lookups/ directory **before ru
    - Columns:
      • Document_Type  
      • Site_Registry_Releaseable (values must be "yes" or "no")
+
+2. site_ids.csv  
+   - Purpose: Contains site id to address mapping.  
 
 This file is mandatory. The pipeline will not run if it is missing.
 
