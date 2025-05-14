@@ -35,7 +35,7 @@ def main():
         else torch.device("cuda") if torch.cuda.is_available()
         else torch.device("cpu")
     )
-    device = 'cpu'
+
     print(f"Using device: {device}")
 
     USE_ML_CLASSIFIER = load_model(device)
