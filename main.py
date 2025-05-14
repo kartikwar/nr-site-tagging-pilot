@@ -20,7 +20,7 @@ if USE_ML_CLASSIFIER:
     from utils.classifier import load_huggingface_model
     try:
         load_huggingface_model("models/document_classification_model")
-        print("[ML Classifier] Model loaded from Hugging Face.")
+        print("[ML Classifier] Model loaded ")
     except Exception as e:
         print(f"[ML Classifier] Failed to load model: {e}")
         USE_ML_CLASSIFIER = False
