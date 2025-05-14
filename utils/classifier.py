@@ -20,7 +20,7 @@ DOCUMENT_TYPES = {
     "REPORT": ["remediation", "report", "summary", "investigation"],
 }
 
-document_class_names = [
+DOCUMENT_CLASS_NAMES = [
     'AIP', 'COA', 'COC', 'CORR', 'COV', 'CSSA', 'DSI', 'FDET', 'IMG', 'MAP',
     'NIRI', 'OTHERS', 'PDET', 'PSI', 'RA', 'RPT', 'SP', 'SSI', 'Site Registry',
     'TITLE', 'TMEMO'
@@ -79,4 +79,4 @@ def classify_with_ml(file_path, device, metadata=None):
         outputs = hf_model(**inputs)
         predicted_class = torch.argmax(outputs.logits, dim=1).item()
 
-    return document_class_names[predicted_class]
+    return DOCUMENT_CLASS_NAMES[predicted_class]
