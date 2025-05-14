@@ -36,6 +36,13 @@ This folder contains all modular helper scripts used by the main document classi
 
 ---
 
+### `gold_data_extraction.py`
+- Loads gold-standard metadata from `clean_metadata.csv`.
+- Matches records using the filename (typically mapped to folder names).
+- Used in the pipeline to compare predicted metadata to the official ground truth.
+
+---
+
 ### `llm_interface.py`
 - Interfaces with Ollama to send prompts to a local quantized LLaMA 2 or Mistral model.
 - Used to extract metadata fields like site ID, title, sender, and address.
@@ -74,10 +81,15 @@ This folder contains all modular helper scripts used by the main document classi
 
 ---
 
-### `gold_data_extraction.py`
-- Loads gold-standard metadata from `clean_metadata.csv`.
-- Matches records using the filename (typically mapped to folder names).
-- Used in the pipeline to compare predicted metadata to the official ground truth.
+### `metadata_rules.py`
+- **[Deprecated]** Placeholder for future rule-based metadata extraction.
+- Not currently used in the active pipeline.
+
+---
+
+### `metadata_rules.py`
+- **[Deprecated]** Placeholder for future rule-based metadata extraction.
+- Not currently used in the active pipeline.
 
 ---
 
@@ -89,6 +101,12 @@ This folder contains all modular helper scripts used by the main document classi
 
 ---
 
-### `metadata_rules.py`
-- **[Deprecated]** Placeholder for future rule-based metadata extraction.
-- Not currently used in the active pipeline.
+### `site_id_to_address.py`
+- Cleans and formats site addresses based on specific rules.
+- Uses fuzzy matching to compare two address fields and retains the most informative one based on length and similarity.
+- Extracts numbers from address fields to identify relevant details like street numbers or suite numbers.
+- Handles cases where the second address field is redundant or contains information not found in the first field.
+- Formats the address by combining the first address, second address (if needed), urban area, and postal code (if available).
+- Supports configurable fuzzy matching threshold to control redundancy detection.
+
+
