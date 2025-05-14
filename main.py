@@ -12,20 +12,12 @@ from utils.gold_data_extraction import load_gold_data
 import config
 import ollama
 import os
+from utils.classifier import load_huggingface_model
 
 
 def load_model(device):
     # Optional: load Hugging Face model if ML mode is enabled
-    USE_ML_CLASSIFIER = True
-    from utils.classifier import load_huggingface_model
-    try:
-        model_path = os.path.join(
-            "models", "document_classification_model")
-        load_huggingface_model(model_path, device)
-        print("[ML Classifier] Model loaded ")
-    except Exception as e:
-        print(f"[ML Classifier] Failed to load model: {e}")
-        USE_ML_CLASSIFIER = False
+
     return USE_ML_CLASSIFIER
 
 
@@ -38,7 +30,17 @@ def main():
 
     print(f"Using device: {device}")
 
-    USE_ML_CLASSIFIER = load_model(device)
+    USE_ML_CLASSIFIER = True
+
+    try:
+        model_path = os.path.join(
+            "models", "document_classification_model")
+        load_huggingface_model(model_path, device)
+        print("[ML Classifier] Model loaded ")
+    except Exception as e:
+        print(f"[ML Classifier] Failed to load model: {e}")
+        USE_ML_CLASSIFIER = False
+
     print(f"value of USE ML {USE_ML_CLASSIFIER}")
 
     input_dir = config.INPUT_DIR
