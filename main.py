@@ -15,12 +15,6 @@ import os
 from utils.classifier import load_huggingface_model
 
 
-def load_model(device):
-    # Optional: load Hugging Face model if ML mode is enabled
-
-    return USE_ML_CLASSIFIER
-
-
 def main():
     device = (
         torch.device("mps") if torch.backends.mps.is_available()
