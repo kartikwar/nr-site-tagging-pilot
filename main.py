@@ -21,7 +21,7 @@ def load_model(device):
     try:
         model_path = os.path.join(
             "models", "document_classification_model")
-        load_huggingface_model(model_path)
+        load_huggingface_model(model_path, device)
         print("[ML Classifier] Model loaded ")
     except Exception as e:
         print(f"[ML Classifier] Failed to load model: {e}")

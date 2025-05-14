@@ -27,10 +27,12 @@ class_names = [
 ]
 
 
-def load_huggingface_model(model_name):
+def load_huggingface_model(model_name, device):
     global hf_tokenizer, hf_model
     hf_tokenizer = AutoTokenizer.from_pretrained(model_name)
     hf_model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    hf_model.to(device)
+    hf_model.eval()
 
 
 def classify_document(file_path, device, metadata=None, mode="regex"):
