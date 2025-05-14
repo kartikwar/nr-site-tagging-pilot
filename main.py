@@ -11,29 +11,35 @@ from utils.metadata_extractor import extract_site_id_from_filename
 from utils.gold_data_extraction import load_gold_data
 import config
 import ollama
+import os
 
-# Toggle this to enable ML-based classification (if model is available)
-USE_ML_CLASSIFIER = True
 
-# Optional: load Hugging Face model if ML mode is enabled
-if USE_ML_CLASSIFIER:
+def load_model(device):
+    # Optional: load Hugging Face model if ML mode is enabled
+    USE_ML_CLASSIFIER = True
     from utils.classifier import load_huggingface_model
     try:
-        load_huggingface_model("models/document_classification_model")
+        model_path = os.path.join(
+            "models", "document_classification_model")
+        load_huggingface_model(model_path)
         print("[ML Classifier] Model loaded ")
     except Exception as e:
         print(f"[ML Classifier] Failed to load model: {e}")
         USE_ML_CLASSIFIER = False
+    return USE_ML_CLASSIFIER
 
 
 def main():
-
     device = (
         torch.device("mps") if torch.backends.mps.is_available()
         else torch.device("cuda") if torch.cuda.is_available()
         else torch.device("cpu")
     )
+    device = 'cpu'
     print(f"Using device: {device}")
+
+    USE_ML_CLASSIFIER = load_model(device)
+    print(f"value of USE ML {USE_ML_CLASSIFIER}")
 
     input_dir = config.INPUT_DIR
     output_dir = config.OUTPUT_DIR
@@ -133,13 +139,13 @@ def main():
 
         # Now get document type
         title = metadata_dict.get("title", "").strip()
-        if (not title) or (title == 'none'):
+        if (not title) or (title == 'none') or (USE_ML_CLASSIFIER == False):
             print(f"Using regex mode")
-            doc_type = classify_document(file_path, {"site_id": site_id, "title": metadata_dict.get(
+            doc_type = classify_document(file_path, device, {"site_id": site_id, "title": metadata_dict.get(
                 "title", "")}, mode="regex")
         else:
             print(f"Using ml mode for {title}")
-            doc_type = classify_document(file_path, {"site_id": site_id, "title": metadata_dict.get(
+            doc_type = classify_document(file_path, device, {"site_id": site_id, "title": metadata_dict.get(
                 "title", "")}, mode="ml")
 
         print(f"document type is {doc_type} for {file_path}")

@@ -33,13 +33,13 @@ def load_huggingface_model(model_name):
     hf_model = AutoModelForSequenceClassification.from_pretrained(model_name)
 
 
-def classify_document(file_path, metadata=None, mode="regex"):
+def classify_document(file_path, device, metadata=None, mode="regex"):
     """
     Wrapper function to classify a document either via ML or regex.
     """
     if mode == "ml":
         try:
-            return classify_with_ml(file_path, metadata)
+            return classify_with_ml(file_path, device, metadata)
         except Exception as e:
             print(
                 f"[ML fallback] Classification failed: {e}. Falling back to regex.")
@@ -59,7 +59,7 @@ def classify_with_regex(file_path):
     return "REPORT"  # default fallback if nothing matches
 
 
-def classify_with_ml(file_path, metadata=None):
+def classify_with_ml(file_path, device, metadata=None):
     """
     Classify document using a fine-tuned Hugging Face transformer model.
     """
@@ -71,6 +71,8 @@ def classify_with_ml(file_path, metadata=None):
 
     inputs = hf_tokenizer(title, return_tensors="pt",
                           truncation=True, padding=True, max_length=64)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
     with torch.no_grad():
         outputs = hf_model(**inputs)
         predicted_class = torch.argmax(outputs.logits, dim=1).item()
