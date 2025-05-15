@@ -20,11 +20,9 @@ DOCUMENT_TYPES = {
     "REPORT": ["remediation", "report", "summary", "investigation"],
 }
 
-DOCUMENT_CLASS_NAMES = [
-    'AIP', 'COA', 'COC', 'CORR', 'COV', 'CSSA', 'DSI', 'FDET', 'IMG', 'MAP',
-    'NIRI', 'OTHERS', 'PDET', 'PSI', 'RA', 'RPT', 'SP', 'SSI', 'Site Registry',
-    'TITLE', 'TMEMO'
-]
+DOCUMENT_CLASS_NAMES = ['AIP', 'COA', 'COC', 'CORR', 'COV', 'CSSA', 'DSI', 'FDET', 'IMG',
+                        'MAP', 'NIR', 'NIRI', 'NOM', 'OTHERS', 'PDET', 'PSI', 'RA', 'RPT',
+                        'SP', 'SSI', 'Site Registry', 'TITLE', 'TMEMO']
 
 
 def load_huggingface_model(model_name, device):
