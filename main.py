@@ -9,6 +9,7 @@ from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_t
 from utils.logger import init_log, log_metadata
 from utils.metadata_extractor import extract_site_id_from_filename
 from utils.gold_data_extraction import load_gold_data
+from utils.site_id_to_address import get_site_address
 import config
 import ollama
 import os
@@ -121,6 +122,14 @@ def main():
             else:
                 print(f"[Re-prompted Invalid Site ID] {proposed_site_id}")
                 site_id_retries += 1
+
+        # Get address from site ID - address CSV, use this preferentially if it exists in the CSV
+        try:
+            metadata_dict['address'] = get_site_address(
+                csv_path='../data/lookups/site_ids.csv', site_id=int(site_id))
+        except:
+            print(
+                f"Address for site ID {site_id} not found in CSV registry! Defaulting to LLM-extracted address.")
 
         # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
         if metadata_dict['address'].lower() != 'none':
