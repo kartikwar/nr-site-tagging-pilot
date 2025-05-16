@@ -21,6 +21,7 @@ For each PDF in the input folder:
 ## Folder Setup
 
 Your folder should look like this:
+
 ### **Directory Structure**
 
 ```plaintext
@@ -44,7 +45,9 @@ CAPSTONE/
 │   │   └── metadata_prompt.txt                     ← LLM prompt template
 │   │   └── address_reprompt.txt
 │   │   └── site_id_reprompt.txt
-│   └── utils/                                      ← Helper scripts (see internal README)
+│   ├── models/ ← Save model here, we will share this with team
+│   │   └── document_classification_model ← ensure same name
+│   └── utils/                   ← Helper scripts (see internal README)
 
 ```
 ---
@@ -71,15 +74,14 @@ This file is mandatory. The pipeline will not run if it is missing.
 1. **Install dependencies**  
 `pip install -r requirements.txt`
 
-2. **Download ollama and install the .exe file** from following https://ollama.com/download/
+2. **Download ollama and install the .exe file** from following <https://ollama.com/download/>
 
 3. **Install Models**
 
-`ollama pull llama2`
 `ollama pull mistral`
 
 4. **Run LLaMA 2 model**  
-`ollama run llama2`
+`ollama run mistral`
 
 5. **Run the pipeline**  
 `python main.py`

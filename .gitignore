@@ -7,3 +7,5 @@ clean_metadata.csv
 
 # Ignore best model
 best_model/
+
+models/

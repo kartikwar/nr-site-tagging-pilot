@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 
 def organize_files(original_path: Path, output_path: Path):
-        """
+    """
     Copies a file from its original location to a structured output path.
     Automatically creates the output directory if it doesn't exist.
 
