@@ -20,12 +20,22 @@ DOCUMENT_TYPES = {
     "REPORT": ["remediation", "report", "summary", "investigation"],
 }
 
+
 DOCUMENT_CLASS_NAMES = ['AIP', 'COA', 'COC', 'CORR', 'COV', 'CSSA', 'DSI', 'FDET', 'IMG',
                         'MAP', 'NIR', 'NIRI', 'NOM', 'OTHERS', 'PDET', 'PSI', 'RA', 'RPT',
                         'SP', 'SSI', 'Site Registry', 'TITLE', 'TMEMO']
 
 
 def load_huggingface_model(model_name, device):
+    """
+    Loads a Hugging Face transformer model and tokenizer for document classification.
+    
+    Parameters:
+        model_name (str): Path to the pre-trained model on Hugging Face Hub.
+    
+    Side Effects:
+        Sets global `hf_tokenizer` and `hf_model` for use in ML classification.
+    """
     global hf_tokenizer, hf_model
     hf_tokenizer = AutoTokenizer.from_pretrained(model_name)
     hf_model = AutoModelForSequenceClassification.from_pretrained(model_name)
@@ -35,7 +45,15 @@ def load_huggingface_model(model_name, device):
 
 def classify_document(file_path, device, metadata=None, mode="regex"):
     """
-    Wrapper function to classify a document either via ML or regex.
+    Classifies a document either using a regex-based method or a transformer-based ML model.
+    
+    Parameters:
+        file_path (Path): Path to the document file.
+        metadata (dict): Optional dictionary containing extracted metadata (used by ML).
+        mode (str): Classification mode: "regex" (default) or "ml".
+    
+    Returns:
+        str: Predicted document type label (e.g., "REPORT", "PSI").
     """
     if mode == "ml":
         try:
@@ -48,7 +66,13 @@ def classify_document(file_path, device, metadata=None, mode="regex"):
 
 def classify_with_regex(file_path):
     """
-    Classify document using keyword matching in filename.
+    Classifies a document by checking for keyword matches in the filename.
+    
+    Parameters:
+        file_path (Path): Path to the document file.
+    
+    Returns:
+        str: Document type label if matched; otherwise, "REPORT" as fallback.
     """
     filename = file_path.name.lower()
 
@@ -61,7 +85,17 @@ def classify_with_regex(file_path):
 
 def classify_with_ml(device, metadata=None):
     """
-    Classify document using a fine-tuned Hugging Face transformer model.
+    Classifies a document using a fine-tuned Hugging Face transformer model.
+    
+    Parameters:
+        file_path (Path): Path to the document file (not used in this method).
+        metadata (dict): Dictionary containing at least a "title" field for classification.
+    
+    Returns:
+        str: Predicted document type label (from label encoder or index).
+    
+    Raises:
+        ValueError: If the Hugging Face model/tokenizer is not loaded.
     """
     if hf_tokenizer is None or hf_model is None:
         raise ValueError(

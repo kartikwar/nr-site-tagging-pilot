@@ -7,9 +7,10 @@ from utils.classifier import classify_document
 from utils.file_organizer import organize_files
 from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template
 from utils.logger import init_log, log_metadata
-from utils.metadata_extractor import extract_site_id_from_filename
+from utils.metadata_extractor import extract_site_id_from_filename, check_duplicate_by_rouge, get_site_registry_releasable
 from utils.gold_data_extraction import load_gold_data
 from utils.site_id_to_address import get_site_address
+from utils.checks import verify_required_files, verify_required_dirs
 import config
 import ollama
 import os
@@ -17,6 +18,29 @@ from utils.classifier import load_huggingface_model
 
 
 def main():
+
+    input_dir = config.INPUT_DIR
+    output_dir = config.OUTPUT_DIR
+    log_path = config.LOG_PATH
+    lookups_path = config.LOOKUPS_PATH
+    
+
+    # Directory and Lookup File checks, if they do not exist program shuts down gracefully
+    required_files = [
+        lookups_path / "site_registry_mapping.xlsx",
+        lookups_path / "site_ids.csv"
+    ]
+    
+    required_dirs = [
+        input_dir,
+        output_dir,
+        lookups_path,
+    ]
+
+    verify_required_dirs(required_dirs)
+    verify_required_files(required_files)
+    
+    
     device = (
         torch.device("mps") if torch.backends.mps.is_available()
         else torch.device("cuda") if torch.cuda.is_available()
@@ -38,9 +62,6 @@ def main():
 
     print(f"value of USE ML {USE_ML_CLASSIFIER}")
 
-    input_dir = config.INPUT_DIR
-    output_dir = config.OUTPUT_DIR
-    log_path = config.LOG_PATH
     # Main prompt to extract metadata fields
     prompt_path = Path("prompts/metadata_prompt.txt")
 
@@ -56,8 +77,8 @@ def main():
     files = load_pdfs(input_dir)
 
     init_log(log_path, headers=[
-        "original_filename", "new_filename", "site_id", "document_type", "title",
-        "receiver", "sender", "address", "readable", "output_path"
+        "Original_Filename", "New_Filename", "Site_id", "Document_Type", "Site_Registry_Releaseable", "Title", 
+        "Receiver", "Sender", "Address", "Duplicate", "Readable", "Output_Path"
     ])
 
     if not files:
@@ -73,11 +94,13 @@ def main():
         else:
             print("[Fallback to LLM] Site ID not found in filename")
 
-        # Extract only first 8 pages of text
+        # Extract only first 8 pages of text and cleaning it
         text = extract_text_from_pdf(file_path, max_pages=8)
+        text = clean_ocr_text(text)
+        
+        prompt = load_prompt_template(prompt_path,  text)
 
-        prompt = load_prompt_template(prompt_path,  clean_ocr_text(text))
-
+        # Querying LLM to extract metadata attributes
         metadata_dict = query_llm(prompt, model="mistral")
 
         # If title extraction fails, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
@@ -94,7 +117,7 @@ def main():
         #    print("Retrying ADDRESS extraction...")
         #    metadata_dict['address'] = llm_single_field_query(address_reprompt, model="mistral")
 
-        # Extract site id values only if needed
+        #Extract site id values only if needed
         llm_site_id = metadata_dict.get("site_id", "none")
 
         # Only evaluate LLM site ID if filename did not provide a valid one
@@ -128,15 +151,14 @@ def main():
             metadata_dict['address'] = get_site_address(
                 csv_path='../data/lookups/site_ids.csv', site_id=int(site_id))
         except:
-            print(
-                f"Address for site ID {site_id} not found in CSV registry! Defaulting to LLM-extracted address.")
-
-        # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
+            print(f"Address for site ID {site_id} not found in CSV registry! Defaulting to LLM-extracted address.")
+            
+        # # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
         if metadata_dict['address'].lower() != 'none':
             if site_id_address_dict.get(site_id) is None:
                 site_id_address_dict[site_id] = metadata_dict['address']
 
-        # If no address is extracted but we have previously extracted an address, re-use it.
+        #If no address is extracted but we have previously extracted an address, re-use it.
         elif site_id_address_dict.get(site_id) is not None:
             print(
                 f"Address not found in document. Re-using previously extracted address from site_id: {site_id}")
@@ -167,18 +189,42 @@ def main():
         # print("\ngold response:\n", gold_data)
         # print('\n----\n')
 
+
+        # Duplicate check
+        site_folder_path = output_dir / site_id
+        duplicate = check_duplicate_by_rouge(
+            current_text=clean_ocr_text(text),
+            site_id_dir=site_folder_path,
+            threshold=0.8,
+            rouge_metric="rouge1"
+        )
+
+       
+
+        # Site registry Releasable Check
+        if duplicate == "yes":
+            releasable = "No (duplicate)"
+        else:
+            releasable = get_site_registry_releasable(doc_type, lookups_path / "site_registry_mapping.xlsx")
+
+        print("final site id: ", site_id, filename)
+        print("duplicate: ", duplicate)
+        print("Site registry Releasable Check: ", releasable)
+        
         organize_files(file_path, output_path)
         log_metadata(log_path, {
-            "original_filename": file_path.name,
-            "new_filename": new_filename,
-            "site_id": site_id,
-            "document_type": doc_type,
-            "title": metadata_dict.get("title", "none"),
-            "receiver": metadata_dict.get("receiver", "none"),
-            "sender": metadata_dict.get("sender", "none"),
-            "address": metadata_dict.get("address", "none"),
-            "readable": metadata_dict.get("readable", "no"),
-            "output_path": str(output_path)
+            "Original_Filename": file_path.name,
+            "New_Filename": new_filename,
+            "Site_id": site_id,
+            "Document_Type": doc_type,
+            "Site_Registry_Releaseable": releasable,
+            "Title": metadata_dict.get("title", "none"),
+            "Receiver": metadata_dict.get("receiver", "none"),
+            "Sender": metadata_dict.get("sender", "none"),
+            "Address": metadata_dict.get("address", "none"),
+            "Duplicate": duplicate,
+            "Readable": metadata_dict.get("readable", "no"),
+            "Output_Path": str(output_path)
         })
 
     print("Pipeline complete.")
