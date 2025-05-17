@@ -5,7 +5,7 @@ from utils.loader import load_pdfs, extract_text_from_pdf, clean_ocr_text
 from utils.rename import generate_new_filename
 from utils.classifier import classify_document
 from utils.file_organizer import organize_files
-from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template
+from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template, title_is_well_formed
 from utils.logger import init_log, log_metadata
 from utils.metadata_extractor import extract_site_id_from_filename
 from utils.gold_data_extraction import load_gold_data
@@ -43,7 +43,8 @@ def main():
 
     # Additional re-prompts for the LLM, only called if the first pass misses an important field
     #address_reprompt_path = Path("prompts/address_reprompt.txt")
-    site_id_reprompt_path = Path("prompts/site_id_reprompt")
+    site_id_reprompt_path = Path("prompts/site_id_reprompt.txt")
+    title_reprompt_path = Path("prompts/title_reprompt.txt")
 
     # Initialize a dict object to store successfully retrieved site ID - address pairs.
     # Some documents are missing address, but ground truth address is shared among all docs with same site ID.
@@ -79,10 +80,26 @@ def main():
 
         # If title extraction fails, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
         metadata_retries = 0
-        while metadata_dict['title'].lower() == 'none' and metadata_retries<5:
+        while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and metadata_retries<5:
             print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
             metadata_dict = query_llm(prompt, model="mistral")
             metadata_retries += 1
+
+        # Null title if document is not readable.
+        if metadata_dict['readable'] == 'no':
+            metadata_dict['title'] = 'none'
+
+        # If a title has been extracted but is not well-formed (too long or hallucinated contents), re-prompt specifically for title.
+        if metadata_dict['title'].lower != 'none':
+            title_retries = 0
+            while not title_is_well_formed(metadata_dict['title'], clean_ocr_text(text)) and title_retries<5:
+                print(f"Retrying title extraction, attempt {title_retries + 1}/5")
+                title_reprompt = load_prompt_template(title_reprompt_path, clean_ocr_text(text))
+                metadata_dict['title'] = llm_single_field_query(title_reprompt, model="mistral")
+                title_retries += 1
+
+
+        #print(f"Current title is: {metadata_dict['title']}")
 
         # If extraction of any other required field fails, call LLM to re-attempt just that field
         #while metadata_dict['address'].lower() == 'none':
@@ -140,11 +157,11 @@ def main():
 
         output_path = output_dir / doc_type / new_filename
 
-        # print("\nmetadata response:\n", metadata_dict)
-        # print("final site id: ", site_id)
-        # gold_data = load_gold_data(filename, 'clean_metadata.csv')
-        # print("\ngold response:\n", gold_data)
-        # print('\n----\n')
+        print("\nmetadata response:\n", metadata_dict)
+        print("final site id: ", site_id)
+        gold_data = load_gold_data(filename, '../data/lookups/clean_metadata.csv')
+        print("\ngold response:\n", gold_data)
+        print('\n----\n')
 
 
         
