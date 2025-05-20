@@ -5,13 +5,14 @@ from utils.loader import load_pdfs, extract_text_from_pdf, clean_ocr_text
 from utils.rename import generate_new_filename
 from utils.classifier import classify_document
 from utils.file_organizer import organize_files
-from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template, title_is_well_formed
+from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template, field_is_well_formed
 from utils.logger import init_log, log_metadata
 from utils.metadata_extractor import extract_site_id_from_filename
 from utils.gold_data_extraction import load_gold_data
 from utils.site_id_to_address import get_site_address
 import config
 import ollama
+from collections import defaultdict
 
 # Toggle this to enable ML-based classification (if model is available)
 USE_ML_CLASSIFIER = False
@@ -27,6 +28,10 @@ if USE_ML_CLASSIFIER:
         USE_ML_CLASSIFIER = False
 
 def main():
+
+    # flagged_for_review dictionary acts as a lookup table for all documents with fields that are low-certainty or unverified.
+    # Structure is {'filename':['uncertain_fields_here']}
+    flagged_for_review = defaultdict(list)
     
     device = (
         torch.device("mps") if torch.backends.mps.is_available()
@@ -45,6 +50,8 @@ def main():
     #address_reprompt_path = Path("prompts/address_reprompt.txt")
     site_id_reprompt_path = Path("prompts/site_id_reprompt.txt")
     title_reprompt_path = Path("prompts/title_reprompt.txt")
+    sender_reprompt_path = Path("prompts/sender_reprompt.txt")
+    receiver_reprompt_path = Path("prompts/receiver_reprompt.txt")
 
     # Initialize a dict object to store successfully retrieved site ID - address pairs.
     # Some documents are missing address, but ground truth address is shared among all docs with same site ID.
@@ -78,25 +85,65 @@ def main():
         
         metadata_dict = query_llm(prompt, model="mistral")
 
-        # If title extraction fails, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
+        # If title extraction fails on a readable document, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
         metadata_retries = 0
-        while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and metadata_retries<5:
+        while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and not metadata_dict['readable'].strip().lower() == 'no' and metadata_retries<5:
             print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
             metadata_dict = query_llm(prompt, model="mistral")
             metadata_retries += 1
 
-        # Null title if document is not readable.
-        if metadata_dict['readable'] == 'no':
+        # Null title, sender, receiver IF document is not readable.
+        if metadata_dict['readable'].strip().lower() == 'no':
             metadata_dict['title'] = 'none'
+            metadata_dict['sender'] = 'none'
+            metadata_dict['receiver'] = 'none'
+        
+        # If document IS readable, verify title, sender, and receiver fields.
+        #=======================================================================================================================#
+        elif metadata_dict['readable'].strip().lower() != 'no':
 
-        # If a title has been extracted but is not well-formed (too long or hallucinated contents), re-prompt specifically for title.
-        if metadata_dict['title'].lower != 'none':
-            title_retries = 0
-            while not title_is_well_formed(metadata_dict['title'], clean_ocr_text(text)) and title_retries<5:
-                print(f"Retrying title extraction, attempt {title_retries + 1}/5")
-                title_reprompt = load_prompt_template(title_reprompt_path, clean_ocr_text(text))
-                metadata_dict['title'] = llm_single_field_query(title_reprompt, model="mistral")
-                title_retries += 1
+            # If a title has been extracted but is not well-formed (too long or hallucinated contents), re-prompt specifically for title.
+            if metadata_dict['title'].strip().lower() != 'none':
+                title_retries = 0
+                while metadata_dict['title'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['title'], clean_ocr_text(text), length=22) and title_retries<5:
+                    print(f"Retrying title extraction, attempt {title_retries + 1}/5")
+                    title_reprompt = load_prompt_template(title_reprompt_path, clean_ocr_text(text))
+                    metadata_dict['title'] = llm_single_field_query(title_reprompt, model="mistral")
+                    title_retries += 1
+
+            # If title still does not fit well-formed criteria, flag it for manual review.
+            if metadata_dict['title'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['title'], clean_ocr_text(text), length=22):
+                flagged_for_review[filename].append('title')
+                print(f"{filename} flagged for manual review: TITLE")
+                #print(f"Current files for review:\n{flagged_for_review}")
+
+            # Similarly, we now re-prompt as necessary if sender and receiver fields are malformed, and flag for review as needed.
+            if metadata_dict['sender'].strip().lower() != 'none':
+                sender_retries = 0
+                while metadata_dict['sender'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['sender'], clean_ocr_text(text), length=17) and sender_retries<5:
+                    print(f"Retrying sender extraction, attempt {sender_retries + 1}/5")
+                    sender_reprompt = load_prompt_template(sender_reprompt_path, clean_ocr_text(text))
+                    metadata_dict['sender'] = llm_single_field_query(sender_reprompt, model="mistral")
+                    sender_retries += 1
+            if metadata_dict['sender'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['sender'], clean_ocr_text(text), length=17):
+                flagged_for_review[filename].append('sender')
+                print(f"{filename} flagged for manual review: SENDER")
+                #print(f"Current files for review:\n{flagged_for_review}")
+
+            if metadata_dict['receiver'].strip().lower() != 'none':
+                receiver_retries = 0
+                while metadata_dict['receiver'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['receiver'], clean_ocr_text(text), length=17) and receiver_retries<5:
+                    print(f"Retrying receiver extraction, attempt {receiver_retries + 1}/5")
+                    receiver_reprompt = load_prompt_template(receiver_reprompt_path, clean_ocr_text(text))
+                    metadata_dict['receiver'] = llm_single_field_query(receiver_reprompt, model="mistral")
+                    receiver_retries += 1
+            if metadata_dict['receiver'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['receiver'], clean_ocr_text(text), length=17):
+                flagged_for_review[filename].append('receiver')
+                print(f"{filename} flagged for manual review: RECEIVER")
+                #print(f"Current files for review:\n{flagged_for_review}")
+        #=======================================================================================================================#
+
+
 
 
         #print(f"Current title is: {metadata_dict['title']}")
