@@ -181,7 +181,7 @@ def main():
         new_filename = generate_new_filename(
             file_path, site_id=site_id, doc_type=doc_type)
 
-        output_path = output_dir / doc_type / new_filename
+        output_path = output_dir / site_id / doc_type / new_filename
 
         # print("\nmetadata response:\n", metadata_dict)
         # print("final site id: ", site_id)
@@ -191,25 +191,25 @@ def main():
 
 
         # Duplicate check
+        # Duplicate check  –  uses new two-step rule (ROUGE + RapidFuzz)
         site_folder_path = output_dir / site_id
-        duplicate = check_duplicate_by_rouge(
-            current_text=clean_ocr_text(text),
-            site_id_dir=site_folder_path,
-            threshold=0.8,
-            rouge_metric="rouge1"
+        duplicate_status = check_duplicate_by_rouge(
+            current_text=file_path,
+            site_id=site_id,
+            site_id_dir=output_dir
         )
 
-       
-
-        # Site registry Releasable Check
-        if duplicate == "yes":
+        # Site Registry Releasable Check
+        if duplicate_status != "no":              # 'contained' or 'likely_duplicate_ocr'
             releasable = "No (duplicate)"
         else:
-            releasable = get_site_registry_releasable(doc_type, lookups_path / "site_registry_mapping.xlsx")
+            releasable = get_site_registry_releasable(
+                doc_type, lookups_path / "site_registry_mapping.xlsx"
+            )
 
-        print("final site id: ", site_id, filename)
-        print("duplicate: ", duplicate)
-        print("Site registry Releasable Check: ", releasable)
+        print("final site id:", site_id, filename)
+        print("duplicate status:", duplicate_status)
+        print("Site Registry Releasable:", releasable)
         
         organize_files(file_path, output_path)
         log_metadata(log_path, {
@@ -222,7 +222,7 @@ def main():
             "Receiver": metadata_dict.get("receiver", "none"),
             "Sender": metadata_dict.get("sender", "none"),
             "Address": metadata_dict.get("address", "none"),
-            "Duplicate": duplicate,
+            "Duplicate": duplicate_status,
             "Readable": metadata_dict.get("readable", "no"),
             "Output_Path": str(output_path)
         })

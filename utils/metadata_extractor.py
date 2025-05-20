@@ -1,10 +1,13 @@
 import re
 import os
+import string
 from pathlib import Path
 from .loader import extract_text_from_pdf, clean_ocr_text
 from rouge_score import rouge_scorer
 import pandas as pd
 import sys
+import fitz
+from rapidfuzz import fuzz
 
 def extract_site_id_from_filename(filename):
     """
@@ -41,42 +44,100 @@ def extract_metadata(file_path):
     print(f"[Metadata] Extracted from {file_path.name}: {metadata}")
     return metadata
 
+_punct = str.maketrans("", "", string.punctuation)
+_space = re.compile(r"\s+")
 
-def check_duplicate_by_rouge(current_text, site_id_dir: Path, threshold=0.8, rouge_metric="rouge1"):
-    """
-    Compares current_text against all PDFs in site_id_dir using ROUGE.
+def _clean(txt: str) -> str:
+    return _space.sub(" ", txt.lower().translate(_punct)).strip()
+
+def _best_window_min_f1(shorter_pages, longer_pages, scorer) -> float:
+    best = 0.0
+    for i in range(len(longer_pages) - len(shorter_pages) + 1):
+        window = longer_pages[i:i+len(shorter_pages)]
+        worst = min(
+            scorer.score(a, b)["rouge1"].fmeasure
+            for a, b in zip(shorter_pages, window)
+        )
+        best = max(best, worst)
+    return best
+
+def check_duplicate_by_rouge(
+        current_text,
+        site_id: str,           # kept for API compatibility
+        site_id_dir: Path,
+        rouge_th: float = 0.75,
+        rapid_th: float = 78.0,
+        rouge_metric: str = "rouge1",
+) -> str:
     
-    Parameters:
-        current_text (str): The cleaned text of the current PDF.
-        site_id_dir (Path): The full path to output_dir / site_id.
-        threshold (float): Minimum score (precision, recall, or F1) to consider as duplicate.
-        rouge_metric (str): 'rouge1', 'rouge2', or 'rougeL'
+    """
+    Two-step duplicate detector.
 
-    Returns:
-        'yes' if any file is a duplicate based on the threshold, else 'no'.
+    Parameters
+    ----------
+    current_text : Union[str, Path]
+        Either the path to the current PDF **or** its cleaned text.
+    site_id_dir : Path
+        Folder that contains candidate PDFs for the same Site ID.
+    rouge_th : float
+        Page-window ROUGE-1 F1 cut-off (default 0.75).
+    rapid_th : float
+        RapidFuzz token-sort ratio cut-off when ROUGE fails (default 78 %).
+    rouge_metric : str
+        'rouge1', 'rouge2', or 'rougeL' – we use 'rouge1' by default.
+
+    Returns
+    -------
+    str
+        'contained'              – every page of the shorter doc is in a longer doc  
+        'likely_duplicate_ocr'   – ROUGE below cut-off but RapidFuzz ≥ rapid_th  
+        'no'                     – not a duplicate
     """
     scorer = rouge_scorer.RougeScorer([rouge_metric], use_stemmer=True)
 
-    # Skip if the folder doesn't exist yet
+    try:
+        cur_doc   = fitz.open(current_text) if isinstance(current_text, (str, Path)) else None
+    except Exception:
+        cur_doc = None
+
+    # If we were passed raw text, wrap it as single page
+    if cur_doc:
+        cur_pages = [_clean(p.get_text()) for p in cur_doc]
+        cur_doc.close()
+    else:
+        cur_pages = [_clean(current_text)]
+
     if not site_id_dir.exists():
         return "no"
 
     for root, _, files in os.walk(site_id_dir):
         for file in files:
-            if file.endswith(".pdf"):
-                file_path = Path(root) / file
-                try:
-                    other_text = extract_text_from_pdf(file_path, max_pages=8)
-                    other_text = clean_ocr_text(other_text)
-                    scores = scorer.score(current_text, other_text).get(rouge_metric, None)
+            if not file.lower().endswith(".pdf"):
+                continue
 
-                    if scores:
-                        if scores.precision >= threshold or scores.recall >= threshold or scores.fmeasure >= threshold:
-                            print(f"[DUPLICATE DETECTED] Compared with {file} — Precision: {scores.precision:.2f}, Recall: {scores.recall:.2f}, F1: {scores.fmeasure:.2f}")
-                            return "yes"
-                except Exception as e:
-                    print(f"[ERROR reading {file}] {e}")
-                    continue
+            # Optional: only check PDFs with same Site ID in filename
+            if site_id and str(site_id) not in file:
+                continue
+
+            cand_path = Path(root) / file
+            try:
+                cand_pages = [_clean(p.get_text()) for p in fitz.open(cand_path)]
+            except Exception as e:
+                print(f"[WARN] {cand_path.name}: {e}")
+                continue
+
+            # ensure cur_pages is shorter
+            a, b = (cur_pages, cand_pages) if len(cur_pages) <= len(cand_pages) else (cand_pages, cur_pages)
+
+            # ---- page-window ROUGE ----
+            if _best_window_min_f1(a, b, scorer) >= rouge_th:
+                print(f"[CONTAINED] {file}")
+                return "contained"
+
+            # ---- RapidFuzz fallback ----
+            if fuzz.token_sort_ratio(" ".join(a), " ".join(b)) >= rapid_th:
+                print(f"[LIKELY DUPLICATE (OCR)] {file}")
+                return "likely_duplicate_ocr"
 
     return "no"
 
