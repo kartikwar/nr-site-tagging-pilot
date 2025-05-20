@@ -75,9 +75,12 @@ This folder contains all modular helper scripts used by the main document classi
 - Extracts the site ID from a filename using regex.
 - Returns a 3–5 digit number if found at the start of the filename.
 - Used as the first-pass method before querying the LLM for site ID.
-- Provides duplicate detection using ROUGE-1 similarity between current text and previous documents under the same site ID.
+- Provides duplicate detection using a two-step strategy:
+- First checks for full page-window containment using ROUGE-1 F1.
+- Falls back to RapidFuzz token sort ratio to handle OCR-distorted matches.
+- Searches across all output subfolders under the same site ID to catch misclassified duplicates.
 - Supports configurable thresholding and ROUGE metric selection.
-- Extracts document release eligibility by matching document types to a preloaded Excel lookup (`site_registry_mapping.xlsx`).
+- Extracts document release eligibility by matching document types to a preloaded Excel lookup (site_registry_mapping.xlsx).
 
 ---
 
