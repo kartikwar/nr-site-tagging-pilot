@@ -4,6 +4,16 @@ import string
 from rapidfuzz import fuzz
 
 def clean_address(addr):
+    """
+    Cleans and normalizes an address string by lowercasing,
+    stripping whitespace, and removing punctuation.
+
+    Parameters:
+        addr (str): The raw address string.
+
+    Returns:
+        str: A cleaned version of the address, or empty string if input is invalid.
+    """
     if not isinstance(addr, str):
         return ''
     addr = addr.lower().strip()
@@ -11,9 +21,29 @@ def clean_address(addr):
     return addr
 
 def extract_numbers(s):
+    """
+    Extracts all numeric tokens from a string.
+
+    Parameters:
+        s (str): The input string.
+
+    Returns:
+        set: A set of numeric substrings found in the input.
+    """
     return set(re.findall(r'\d+', s))
 
 def format_address(row, threshold=85):
+    """
+    Formats a complete address string from two address fields, urban area, and postal code,
+    applying logic to remove redundancy or preserve useful details.
+
+    Parameters:
+        row (pd.Series): A row from a DataFrame with 'Address 1', 'Address 2', 'Urban Area', and 'Postal Code'.
+        threshold (int): Fuzzy match threshold (0–100) to consider two addresses redundant.
+
+    Returns:
+        str: A formatted, deduplicated address string.
+    """
     addr1_raw = row['Address 1']
     addr2_raw = row['Address 2']
     urban_area = row['Urban Area']
@@ -60,6 +90,16 @@ def format_address(row, threshold=85):
 
 # Load CSV and apply to a specific Site ID
 def get_site_address(csv_path, site_id):
+    """
+    Loads a CSV file and returns the formatted address for a given Site ID.
+
+    Parameters:
+        csv_path (str or Path): Path to the CSV file.
+        site_id (str or int): The Site ID to search for.
+
+    Returns:
+        str: The formatted address for the specified Site ID.
+    """
     df = pd.read_csv(csv_path)
     row = df[df['Site ID'] == site_id]
     return format_address(row.iloc[0])

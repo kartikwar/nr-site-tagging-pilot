@@ -18,10 +18,28 @@ This folder contains all modular helper scripts used by the main document classi
 
 ---
 
+### `checks.py`
+- Performs startup verification for required files and directories.
+- `verify_required_files()`:
+  - Ensures all required lookup files (e.g., Excel configs) exist before pipeline runs.
+  - Fails fast with clear error messages if any file is missing.
+- `verify_required_dirs()`:
+  - Ensures necessary directories (e.g., `data/input/`, `data/output/`) are present.
+  - Fails cleanly if folders are missing and provides actionable messaging.
+
+---
+
 ### `file_organizer.py`
 - Copies a file into `data/output/{DOC_TYPE}/` using its new standardized filename.
 - Automatically creates output directories if they don’t exist.
 - Designed to keep output files separate from the input dataset and repository.
+
+---
+
+### `gold_data_extraction.py`
+- Loads gold-standard metadata from `clean_metadata.csv`.
+- Matches records using the filename (typically mapped to folder names).
+- Used in the pipeline to compare predicted metadata to the official ground truth.
 
 ---
 
@@ -57,13 +75,24 @@ This folder contains all modular helper scripts used by the main document classi
 - Extracts the site ID from a filename using regex.
 - Returns a 3–5 digit number if found at the start of the filename.
 - Used as the first-pass method before querying the LLM for site ID.
+- Provides duplicate detection using a two-step strategy:
+- First checks for full page-window containment using ROUGE-1 F1.
+- Falls back to RapidFuzz token sort ratio to handle OCR-distorted matches.
+- Searches across all output subfolders under the same site ID to catch misclassified duplicates.
+- Supports configurable thresholding and ROUGE metric selection.
+- Extracts document release eligibility by matching document types to a preloaded Excel lookup (site_registry_mapping.xlsx).
 
 ---
 
-### `gold_data_extraction.py`
-- Loads gold-standard metadata from `clean_metadata.csv`.
-- Matches records using the filename (typically mapped to folder names).
-- Used in the pipeline to compare predicted metadata to the official ground truth.
+### `metadata_rules.py`
+- **[Deprecated]** Placeholder for future rule-based metadata extraction.
+- Not currently used in the active pipeline.
+
+---
+
+### `metadata_rules.py`
+- **[Deprecated]** Placeholder for future rule-based metadata extraction.
+- Not currently used in the active pipeline.
 
 ---
 
@@ -75,6 +104,12 @@ This folder contains all modular helper scripts used by the main document classi
 
 ---
 
-### `metadata_rules.py`
-- **[Deprecated]** Placeholder for future rule-based metadata extraction.
-- Not currently used in the active pipeline.
+### `site_id_to_address.py`
+- Cleans and formats site addresses based on specific rules.
+- Uses fuzzy matching to compare two address fields and retains the most informative one based on length and similarity.
+- Extracts numbers from address fields to identify relevant details like street numbers or suite numbers.
+- Handles cases where the second address field is redundant or contains information not found in the first field.
+- Formats the address by combining the first address, second address (if needed), urban area, and postal code (if available).
+- Supports configurable fuzzy matching threshold to control redundancy detection.
+
+
