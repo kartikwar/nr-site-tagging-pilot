@@ -1,5 +1,6 @@
 import ollama
 import re
+from difflib import SequenceMatcher
 
 
 def load_prompt_template(path, doc_text: str) -> str:
@@ -74,3 +75,38 @@ def llm_single_field_query(prompt, model="llama2", system_prompt=None) -> str:
     raw = response['message']['content'].strip()
 
     return raw
+  
+def all_words_in_text(field, text):
+    """A simple function to check whether the words in the extracted field are indeed all 
+    present in the document. Ignores word order. Used to verify the LLM is not hallucinating.
+    
+    field (str): the field (title, sender, receiver, etc) extracted by the LLM.
+    text (str): the OCR-cleaned text from which the title was extracted."""
+
+    # Remove all punctuation and digits before checking (LLM occasionally adds harmless punctuation)
+    field = re.sub(r'[^\w\s]', ' ', field)
+    field = re.sub(r'\d+', ' ', field)
+
+    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r'\d+', ' ', text)
+
+    # If field is nothing but whitespace, punctuation, or digits, reject it
+    if not field.strip():
+        return False
+
+    # If any word in field does not occur in actual text, reject it
+    for word in field.lower().split():
+        if word not in text.lower().split():
+            return False
+    return True
+
+def field_is_well_formed(field, text, length):
+    """Check if title is an appropriate length, and all words in title appear in text.
+
+    field (str): the field (title, sender, receiver, etc) extracted by the LLM.
+    text (str): the OCR-cleaned text from which the title was extracted.
+    length (int): the desired length of the field, in tokens.
+    """
+    if len(field.split()) < length and all_words_in_text(field, text):
+        return True
+    return False
