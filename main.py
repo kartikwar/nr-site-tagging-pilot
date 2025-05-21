@@ -238,35 +238,56 @@ def main():
 
         print(f"document type is {doc_type} for {file_path}")
 
-        # Generate filename after doc_type is available
-        new_filename = generate_new_filename(
-            file_path, site_id=site_id, doc_type=doc_type)
+       # Duplicate check – uses two-step rule (ROUGE + RapidFuzz)
+        duplicate_status, matched_path, is_current_file_shorter = check_duplicate_by_rouge(
+            current_text=file_path,
+            site_id=site_id,
+            site_id_dir=output_dir / site_id
+        )
+        # Only mark as duplicate if this file is shorter than the matched one
+        if duplicate_status != "no" and not is_current_file_shorter:
+            print("[DUPLICATE IGNORED] Current file is longer or equal in length. Skipping duplicate flag.")
+            duplicate_status = "no"
+            matched_path = None
+        else:
+            print("[DUPLICATE CONFIRMED] Current file is shorter. Will be tagged as -DUP.")
 
-        output_path = output_dir / site_id / doc_type / new_filename
+        # Site Registry Releasable Check
+        if duplicate_status != "no":
+            releasable = "No (duplicate)"
+        else:
+            releasable = get_site_registry_releasable(
+                doc_type, lookups_path / "site_registry_mapping.xlsx"
+            )
+
+        # Generate filename after duplicate logic
+        # Step 1: Get year (don't pass output_dir yet)
+        temp_filename, year = generate_new_filename(
+            file_path,
+            site_id=site_id,
+            doc_type=doc_type,
+            duplicate=(duplicate_status != "no"),
+            output_dir=None  # avoid using 'year' before it's defined
+        )
+
+        # Step 2: Now that you have year, build final path and call again
+        final_output_dir = output_dir / site_id / f"{year}-{doc_type.upper()}"
+
+        new_filename, _ = generate_new_filename(
+            file_path,
+            site_id=site_id,
+            doc_type=doc_type,
+            duplicate=(duplicate_status != "no"),
+            output_dir=final_output_dir
+        )
+
+        output_path = final_output_dir / new_filename
 
         print("\nmetadata response:\n", metadata_dict)
         print("final site id: ", site_id)
         gold_data = load_gold_data(filename, '../data/lookups/clean_metadata.csv')
         print("\ngold response:\n", gold_data)
         print('\n----\n')
-
-
-        # Duplicate check
-        # Duplicate check  –  uses new two-step rule (ROUGE + RapidFuzz)
-        site_folder_path = output_dir / site_id
-        duplicate_status = check_duplicate_by_rouge(
-            current_text=file_path,
-            site_id=site_id,
-            site_id_dir=output_dir
-        )
-
-        # Site Registry Releasable Check
-        if duplicate_status != "no":              # 'contained' or 'likely_duplicate_ocr'
-            releasable = "No (duplicate)"
-        else:
-            releasable = get_site_registry_releasable(
-                doc_type, lookups_path / "site_registry_mapping.xlsx"
-            )
 
         print("final site id:", site_id, filename)
         print("duplicate status:", duplicate_status)

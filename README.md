@@ -29,12 +29,18 @@ CAPSTONE/
 ├── data/
 │   ├── input/                                      ← Raw PDFs go here
 │   ├── output/                                     ← Renamed + organized PDFs will go here
+│   ├── evaluation/
+│   │   ├── evaluation_log.csv                      ← Log of all processed files
+│   │   └── output/                                 ← Renamed + organized gold PDFs will go here
 │   ├── logs/                                       ← CSV log will go here
+│   ├── gold_files/                                 ← Gold standard PDFs for validation
 │   └── lookups/                                    ← Required lookup/reference files
 │       └── site_registry_mapping.xlsx              ← REQUIRED: Document type to release eligibility mapping
 │       └── site_ids.csv                            ← REQUIRED: Site ID to Address mapping
+│       └── clean_metadata.csv                      ← REQUIRED: Gold standard metadata for validation
 ├── nr-site-tagging-pilot/
 │   ├── main.py
+│   ├── evaluate.py
 │   ├── config.py
 │   ├── requirements.txt
 │   ├── README.md
@@ -56,8 +62,8 @@ REQUIRED LOOKUP FILES
 
 The following file must be placed inside the data/lookups/ directory **before running the pipeline**:
 
-1. site_registry_mapping.xlsx  
-   - Purpose: Determines whether a document is publicly releasable based on its type.  
+1. site_registry_mapping.xlsx
+   - Purpose: Determines whether a document is publicly releasable based on its type. Avaliable on the Teams channel.
    - Columns:
      • Document_Type  
      • Site_Registry_Releaseable (values must be "yes" or "no")
@@ -65,7 +71,10 @@ The following file must be placed inside the data/lookups/ directory **before ru
 2. site_ids.csv  
    - Purpose: Contains site id to address mapping.  
 
-This file is mandatory. The pipeline will not run if it is missing.
+This file is mandatory. The pipeline will not run if it is missing. Avaliable on the Teams channel.
+
+3. clean_metadata.csv  
+   - Purpose: Contains the gold standard metadata for validation. Avaliable on the Teams channel.
 
 ---
 
@@ -80,7 +89,7 @@ This file is mandatory. The pipeline will not run if it is missing.
 
 `ollama pull mistral`
 
-4. **Run LLaMA 2 model**  
+4. **Run Mistral model**  
 `ollama run mistral`
 
 5. **Run the pipeline**  
@@ -88,9 +97,32 @@ This file is mandatory. The pipeline will not run if it is missing.
 
 ---
 
+## Evaulation Mode
+
+To evaluate the accuracy of the pipeline:
+
+1.	**Place gold test PDFs in data/gold_files/**
+
+2.	**Ensure gold metadata file exists at data/lookups/clean_metadata.csv**
+
+3.	**Run:**
+`python evaluate.py`
+
+This will:
+
+- Run the pipeline using gold input files
+- Save processed files in data/evaluation/output/
+- Log output metadata in data/evaluation/evaluation_log.csv
+- Compute and print F1 scores for:
+- Duplicate detection (yes vs no)
+- Site Registry Releasable (yes vs no)
+
+Evaluation output is self-contained and does not modify your main output/logs folders.
+
+
 ## Output
 
-Each processed PDF will appear in `outputs/Site ID/TYPE/` with a new standardized filename. A CSV log is created at `logs/metadata_log.csv` with:
+Each processed PDF will appear in `outputs/Site_ID/YYYY-DOC_TYPE/` with a new standardized filename. A CSV log is created at `logs/metadata_log.csv` during normal runs, and at `evaluation/evaluation_log.csv` during evaluation mode. The log contains the following fields:
 
 - Original_Filename            → Name of the original input PDF
 - New_Filename                 → Standardized renamed file

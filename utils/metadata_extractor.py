@@ -68,7 +68,7 @@ def check_duplicate_by_rouge(
         rouge_th: float = 0.75,
         rapid_th: float = 78.0,
         rouge_metric: str = "rouge1",
-) -> str:
+) -> tuple[str, Path | None, bool]:
     
     """
     Two-step duplicate detector.
@@ -88,10 +88,12 @@ def check_duplicate_by_rouge(
 
     Returns
     -------
-    str
-        'contained'              – every page of the shorter doc is in a longer doc  
-        'likely_duplicate_ocr'   – ROUGE below cut-off but RapidFuzz ≥ rapid_th  
-        'no'                     – not a duplicate
+    tuple
+        (duplicate_status, matched_file_path, is_current_file_shorter)
+
+        duplicate_status: 'contained', 'likely_duplicate_ocr', or 'no'
+        matched_file_path: Path of the matched file in the output folder (if any)
+        is_current_file_shorter: True if current file is shorter than match (i.e., should be tagged as duplicate)
     """
     scorer = rouge_scorer.RougeScorer([rouge_metric], use_stemmer=True)
 
@@ -108,7 +110,7 @@ def check_duplicate_by_rouge(
         cur_pages = [_clean(current_text)]
 
     if not site_id_dir.exists():
-        return "no"
+        return "no", None, False
 
     for root, _, files in os.walk(site_id_dir):
         for file in files:
@@ -132,14 +134,14 @@ def check_duplicate_by_rouge(
             # ---- page-window ROUGE ----
             if _best_window_min_f1(a, b, scorer) >= rouge_th:
                 print(f"[CONTAINED] {file}")
-                return "contained"
+                return "contained", cand_path, len(cur_pages) <= len(cand_pages)
 
             # ---- RapidFuzz fallback ----
             if fuzz.token_sort_ratio(" ".join(a), " ".join(b)) >= rapid_th:
                 print(f"[LIKELY DUPLICATE (OCR)] {file}")
-                return "likely_duplicate_ocr"
+                return "likely_duplicate_ocr", cand_path, len(cur_pages) <= len(cand_pages)
 
-    return "no"
+    return "no", None, False
 
 
 _release_df = None  # cache for loaded Excel
