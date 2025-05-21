@@ -113,9 +113,9 @@ This will:
 - Run the pipeline using gold input files
 - Save processed files in data/evaluation/output/
 - Log output metadata in data/evaluation/evaluation_log.csv
-- Compute and print F1 scores for:
-- Duplicate detection (yes vs no)
-- Site Registry Releasable (yes vs no)
+- Compute and print F1, precision and recall scores for:
+   - Duplicate detection (yes vs no)
+   - Site Registry Releasable (yes vs no)
 
 Evaluation output is self-contained and does not modify your main output/logs folders.
 

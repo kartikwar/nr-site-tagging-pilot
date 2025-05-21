@@ -19,6 +19,28 @@ from utils.classifier import load_huggingface_model
 
 
 def main():
+    print("[Starting Pipeline Initialization]")
+
+    device = (
+        torch.device("mps") if torch.backends.mps.is_available()
+        else torch.device("cuda") if torch.cuda.is_available()
+        else torch.device("cpu")
+    )
+
+    print(f"Using device: {device}")
+
+    USE_ML_CLASSIFIER = True
+
+    try:
+        model_path = os.path.join(
+            "models", "document_classification_model")
+        load_huggingface_model(model_path, device)
+        print("[ML Classifier] Model loaded ")
+    except Exception as e:
+        print(f"[ML Classifier] Failed to load model: {e}")
+        USE_ML_CLASSIFIER = False
+
+    print(f"value of USE ML {USE_ML_CLASSIFIER}")
 
     # flagged_for_review dictionary acts as a lookup table for all documents with fields that are low-certainty or unverified.
     # Structure is {'filename':['uncertain_fields_here']}
@@ -44,27 +66,6 @@ def main():
     verify_required_dirs(required_dirs)
     verify_required_files(required_files)
 
-    device = (
-        torch.device("mps") if torch.backends.mps.is_available()
-        else torch.device("cuda") if torch.cuda.is_available()
-        else torch.device("cpu")
-    )
-
-    print(f"Using device: {device}")
-
-    USE_ML_CLASSIFIER = True
-
-    try:
-        model_path = os.path.join(
-            "models", "document_classification_model")
-        load_huggingface_model(model_path, device)
-        print("[ML Classifier] Model loaded ")
-    except Exception as e:
-        print(f"[ML Classifier] Failed to load model: {e}")
-        USE_ML_CLASSIFIER = False
-
-    print(f"value of USE ML {USE_ML_CLASSIFIER}")
-
     # Main prompt to extract metadata fields
     prompt_path = Path("prompts/metadata_prompt.txt")
 
@@ -84,7 +85,7 @@ def main():
 
     init_log(log_path, headers=[
         "Original_Filename", "New_Filename", "Site_id", "Document_Type", "Site_Registry_Releaseable", "Title",
-        "Receiver", "Sender", "Address", "Duplicate", "Readable", "Output_Path"
+        "Receiver", "Sender", "Address", "Duplicate", "Similarity_Score", "Readable", "Output_Path"
     ])
 
     if not files:
@@ -92,6 +93,10 @@ def main():
         return
 
     for file_path in files:
+        print("\n" + "=" * 100)
+        print(f"[STARTING] Processing file: {file_path.name}")
+        print("=" * 100 + "\n")
+
         filename = file_path.name
         site_id = extract_site_id_from_filename(filename)
 
@@ -245,7 +250,7 @@ def main():
         print(f"document type is {doc_type} for {file_path}")
 
        # Duplicate check – uses two-step rule (ROUGE + RapidFuzz)
-        duplicate_status, matched_path, is_current_file_shorter = check_duplicate_by_rouge(
+        duplicate_status, matched_path, is_current_file_shorter, similarity_score = check_duplicate_by_rouge(
             current_text=file_path,
             site_id=site_id,
             site_id_dir=output_dir / site_id
@@ -299,8 +304,8 @@ def main():
         print('\n----\n')
 
         print("final site id:", site_id, filename)
-        print("duplicate status:", duplicate_status)
-        print("Site Registry Releasable:", releasable)
+        print(f"[DUPLICATE STATUS] {duplicate_status}")
+        print(f"[RELEASABLE] {releasable}")
 
         organize_files(file_path, output_path)
         log_metadata(log_path, {
@@ -314,9 +319,14 @@ def main():
             "Sender": metadata_dict.get("sender", "none"),
             "Address": metadata_dict.get("address", "none"),
             "Duplicate": duplicate_status,
+            "Similarity_Score": similarity_score if similarity_score is not None else "",
             "Readable": metadata_dict.get("readable", "no"),
             "Output_Path": str(output_path)
         })
+
+        print("\n" + "-" * 100)
+        print(f"[COMPLETED] {file_path.name}")
+        print("-" * 100)
 
     print("Pipeline complete.")
 
