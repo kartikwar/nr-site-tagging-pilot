@@ -23,19 +23,18 @@ def main():
     # flagged_for_review dictionary acts as a lookup table for all documents with fields that are low-certainty or unverified.
     # Structure is {'filename':['uncertain_fields_here']}
     flagged_for_review = defaultdict(list)
-    
+
     input_dir = config.INPUT_DIR
     output_dir = config.OUTPUT_DIR
     log_path = config.LOG_PATH
     lookups_path = config.LOOKUPS_PATH
-    
 
     # Directory and Lookup File checks, if they do not exist program shuts down gracefully
     required_files = [
         lookups_path / "site_registry_mapping.xlsx",
         lookups_path / "site_ids.csv"
     ]
-    
+
     required_dirs = [
         input_dir,
         output_dir,
@@ -44,8 +43,7 @@ def main():
 
     verify_required_dirs(required_dirs)
     verify_required_files(required_files)
-    
-    
+
     device = (
         torch.device("mps") if torch.backends.mps.is_available()
         else torch.device("cuda") if torch.cuda.is_available()
@@ -71,7 +69,7 @@ def main():
     prompt_path = Path("prompts/metadata_prompt.txt")
 
     # Additional re-prompts for the LLM, only called if the first pass misses an important field
-    #address_reprompt_path = Path("prompts/address_reprompt.txt")
+    # address_reprompt_path = Path("prompts/address_reprompt.txt")
     site_id_reprompt_path = Path("prompts/site_id_reprompt.txt")
     title_reprompt_path = Path("prompts/title_reprompt.txt")
     sender_reprompt_path = Path("prompts/sender_reprompt.txt")
@@ -85,7 +83,7 @@ def main():
     files = load_pdfs(input_dir)
 
     init_log(log_path, headers=[
-        "Original_Filename", "New_Filename", "Site_id", "Document_Type", "Site_Registry_Releaseable", "Title", 
+        "Original_Filename", "New_Filename", "Site_id", "Document_Type", "Site_Registry_Releaseable", "Title",
         "Receiver", "Sender", "Address", "Duplicate", "Readable", "Output_Path"
     ])
 
@@ -105,7 +103,7 @@ def main():
         # Extract only first 8 pages of text and cleaning it
         text = extract_text_from_pdf(file_path, max_pages=8)
         text = clean_ocr_text(text)
-        
+
         prompt = load_prompt_template(prompt_path,  text)
 
         # Querying LLM to extract metadata attributes
@@ -113,8 +111,9 @@ def main():
 
         # If title extraction fails on a readable document, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
         metadata_retries = 0
-        while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and not metadata_dict['readable'].strip().lower() == 'no' and metadata_retries<5:
-            print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
+        while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and not metadata_dict['readable'].strip().lower() == 'no' and metadata_retries < 5:
+            print(
+                f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
             metadata_dict = query_llm(prompt, model="mistral")
             metadata_retries += 1
 
@@ -123,54 +122,60 @@ def main():
             metadata_dict['title'] = 'none'
             metadata_dict['sender'] = 'none'
             metadata_dict['receiver'] = 'none'
-        
+
         # If document IS readable, verify title, sender, and receiver fields.
         elif metadata_dict['readable'].strip().lower() != 'no':
 
             # If a title has been extracted but is not well-formed (too long or hallucinated contents), re-prompt specifically for title.
             if metadata_dict['title'].strip().lower() != 'none':
                 title_retries = 0
-                while metadata_dict['title'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['title'], clean_ocr_text(text), length=22) and title_retries<5:
-                    print(f"Retrying title extraction, attempt {title_retries + 1}/5")
-                    title_reprompt = load_prompt_template(title_reprompt_path, clean_ocr_text(text))
-                    metadata_dict['title'] = llm_single_field_query(title_reprompt, model="mistral")
+                while metadata_dict['title'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['title'], clean_ocr_text(text), length=22) and title_retries < 5:
+                    print(
+                        f"Retrying title extraction, attempt {title_retries + 1}/5")
+                    title_reprompt = load_prompt_template(
+                        title_reprompt_path, clean_ocr_text(text))
+                    metadata_dict['title'] = llm_single_field_query(
+                        title_reprompt, model="mistral")
                     title_retries += 1
 
             # If title still does not fit well-formed criteria, flag it for manual review.
             if metadata_dict['title'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['title'], clean_ocr_text(text), length=22):
                 flagged_for_review[filename].append('title')
                 print(f"{filename} flagged for manual review: TITLE")
-                #print(f"Current files for review:\n{flagged_for_review}")
+                # print(f"Current files for review:\n{flagged_for_review}")
 
             # Similarly, we now re-prompt as necessary if sender and receiver fields are malformed, and flag for review as needed.
             if metadata_dict['sender'].strip().lower() != 'none':
                 sender_retries = 0
-                while metadata_dict['sender'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['sender'], clean_ocr_text(text), length=17) and sender_retries<5:
-                    print(f"Retrying sender extraction, attempt {sender_retries + 1}/5")
-                    sender_reprompt = load_prompt_template(sender_reprompt_path, clean_ocr_text(text))
-                    metadata_dict['sender'] = llm_single_field_query(sender_reprompt, model="mistral")
+                while metadata_dict['sender'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['sender'], clean_ocr_text(text), length=17) and sender_retries < 5:
+                    print(
+                        f"Retrying sender extraction, attempt {sender_retries + 1}/5")
+                    sender_reprompt = load_prompt_template(
+                        sender_reprompt_path, clean_ocr_text(text))
+                    metadata_dict['sender'] = llm_single_field_query(
+                        sender_reprompt, model="mistral")
                     sender_retries += 1
             if metadata_dict['sender'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['sender'], clean_ocr_text(text), length=17):
                 flagged_for_review[filename].append('sender')
                 print(f"{filename} flagged for manual review: SENDER")
-                #print(f"Current files for review:\n{flagged_for_review}")
+                # print(f"Current files for review:\n{flagged_for_review}")
 
             if metadata_dict['receiver'].strip().lower() != 'none':
                 receiver_retries = 0
-                while metadata_dict['receiver'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['receiver'], clean_ocr_text(text), length=17) and receiver_retries<5:
-                    print(f"Retrying receiver extraction, attempt {receiver_retries + 1}/5")
-                    receiver_reprompt = load_prompt_template(receiver_reprompt_path, clean_ocr_text(text))
-                    metadata_dict['receiver'] = llm_single_field_query(receiver_reprompt, model="mistral")
+                while metadata_dict['receiver'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['receiver'], clean_ocr_text(text), length=17) and receiver_retries < 5:
+                    print(
+                        f"Retrying receiver extraction, attempt {receiver_retries + 1}/5")
+                    receiver_reprompt = load_prompt_template(
+                        receiver_reprompt_path, clean_ocr_text(text))
+                    metadata_dict['receiver'] = llm_single_field_query(
+                        receiver_reprompt, model="mistral")
                     receiver_retries += 1
             if metadata_dict['receiver'].strip().lower() != 'none' and not field_is_well_formed(metadata_dict['receiver'], clean_ocr_text(text), length=17):
                 flagged_for_review[filename].append('receiver')
                 print(f"{filename} flagged for manual review: RECEIVER")
-                #print(f"Current files for review:\n{flagged_for_review}")
+                # print(f"Current files for review:\n{flagged_for_review}")
 
-
-
-
-        #print(f"Current title is: {metadata_dict['title']}")
+        # print(f"Current title is: {metadata_dict['title']}")
 
         # If extraction of any other required field fails, call LLM to re-attempt just that field
         # while metadata_dict['address'].lower() == 'none':
@@ -178,7 +183,7 @@ def main():
         #    print("Retrying ADDRESS extraction...")
         #    metadata_dict['address'] = llm_single_field_query(address_reprompt, model="mistral")
 
-        #Extract site id values only if needed
+        # Extract site id values only if needed
         llm_site_id = metadata_dict.get("site_id", "none")
 
         # Only evaluate LLM site ID if filename did not provide a valid one
@@ -212,14 +217,15 @@ def main():
             metadata_dict['address'] = get_site_address(
                 csv_path='../data/lookups/site_ids.csv', site_id=int(site_id))
         except:
-            print(f"Address for site ID {site_id} not found in CSV registry! Defaulting to LLM-extracted address.")
-            
+            print(
+                f"Address for site ID {site_id} not found in CSV registry! Defaulting to LLM-extracted address.")
+
         # # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
         if metadata_dict['address'].lower() != 'none':
             if site_id_address_dict.get(site_id) is None:
                 site_id_address_dict[site_id] = metadata_dict['address']
 
-        #If no address is extracted but we have previously extracted an address, re-use it.
+        # If no address is extracted but we have previously extracted an address, re-use it.
         elif site_id_address_dict.get(site_id) is not None:
             print(
                 f"Address not found in document. Re-using previously extracted address from site_id: {site_id}")
@@ -246,11 +252,13 @@ def main():
         )
         # Only mark as duplicate if this file is shorter than the matched one
         if duplicate_status != "no" and not is_current_file_shorter:
-            print("[DUPLICATE IGNORED] Current file is longer or equal in length. Skipping duplicate flag.")
+            print(
+                "[DUPLICATE IGNORED] Current file is longer or equal in length. Skipping duplicate flag.")
             duplicate_status = "no"
             matched_path = None
         else:
-            print("[DUPLICATE CONFIRMED] Current file is shorter. Will be tagged as -DUP.")
+            print(
+                "[DUPLICATE CONFIRMED] Current file is shorter. Will be tagged as -DUP.")
 
         # Site Registry Releasable Check
         if duplicate_status != "no":
@@ -285,14 +293,15 @@ def main():
 
         print("\nmetadata response:\n", metadata_dict)
         print("final site id: ", site_id)
-        gold_data = load_gold_data(filename, '../data/lookups/clean_metadata.csv')
+        gold_data = load_gold_data(
+            filename, '../data/lookups/clean_metadata.csv')
         print("\ngold response:\n", gold_data)
         print('\n----\n')
 
         print("final site id:", site_id, filename)
         print("duplicate status:", duplicate_status)
         print("Site Registry Releasable:", releasable)
-        
+
         organize_files(file_path, output_path)
         log_metadata(log_path, {
             "Original_Filename": file_path.name,
