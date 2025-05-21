@@ -4,6 +4,7 @@ from sklearn.metrics import f1_score
 from pathlib import Path
 from config import INPUT_DIR, OUTPUT_DIR, LOG_PATH, GOLD_FILES_DIR, GOLD_METADATA_PATH, EVALUATION_DIR
 from main import main
+from rouge_score import rouge_scorer
 
 
 import config
@@ -29,6 +30,15 @@ def files_preparation():
         shutil.copy(pdf, INPUT_DIR / pdf.name)
 
 
+def normalize_columns(df, columns):
+    for column in columns:
+        df[column + "_gold"] = df[column + "_gold"].str.lower(
+        ).str.strip()
+        df[column + "_pred"] = df[column + "_pred"].str.lower(
+        ).str.strip()
+    return df
+
+
 def load_evaluation_dataframe():
     pred_df = pd.read_csv(LOG_PATH)
     gold_df = pd.read_csv(GOLD_METADATA_PATH, header=3)
@@ -37,11 +47,15 @@ def load_evaluation_dataframe():
     pred_df["Original_Filename"] = pred_df["Original_Filename"].str.strip()
     gold_df["Current BC Mail title"] = gold_df["Current BC Mail title"].str.strip()
 
-    # rename so that column names are same
+    # rename so that column names are same for both pred and gold
+    rename_dict = {
+        "Duplicate  (Y/N)": "Duplicate",
+        'Site Registry releaseable': 'Site_Registry_Releaseable',
+        'Title/Subject': 'Title',
+        'Sender/Author': 'Sender'
+    }
 
-    gold_df = gold_df.rename(columns={"Duplicate  (Y/N)": "Duplicate"})
-    gold_df = gold_df.rename(
-        columns={'Site Registry releaseable': 'Site_Registry_Releaseable'})
+    gold_df = gold_df.rename(columns=rename_dict)
 
     # Merge on original filename
     merged_df = pd.merge(
@@ -59,16 +73,37 @@ def load_evaluation_dataframe():
     merged_df["Duplicate_pred"] = merged_df["Duplicate_pred"].apply(
         lambda x: "yes" if x.lower() in ["contained", "likely_duplicate_ocr", "yes"] else "no")
 
-    # Convert Site Registry to lowercase yes/no
-    merged_df["Site_Registry_Releaseable_gold"] = merged_df["Site_Registry_Releaseable_gold"].str.lower(
-    ).str.strip()
-    merged_df["Site_Registry_Releaseable_pred"] = merged_df["Site_Registry_Releaseable_pred"].str.lower(
-    ).str.strip()
+    # strip spaces and lower words
+    merged_df = normalize_columns(
+        merged_df, ["Site_Registry_Releaseable", "Title", "Sender", "Receiver"])
 
     return merged_df
 
 
-def compute_scores():
+def get_rouge1_recall(gold, pred):
+    scorer = rouge_scorer.RougeScorer(['rouge1'],
+                                      use_stemmer=True)
+    score = scorer.score(gold, pred)['rouge1']
+    return score.recall
+
+
+def compute_rouge_recall(df, gol_col, pred_col, store_as):
+    df[store_as] = df.apply(
+        lambda row: get_rouge1_recall(row[gol_col], row[pred_col]), axis=1)
+    return df
+
+
+def compute_scores(merged_df):
+    # compute rouge 1 recall score for title and store it in df
+    merged_df = compute_rouge_recall(
+        merged_df, 'Title_gold', 'Title_pred', 'Title_recall')
+
+    merged_df = compute_rouge_recall(
+        merged_df, 'Receiver_gold', 'Receiver_pred', 'Receiver_recall')
+
+    merged_df = compute_rouge_recall(
+        merged_df, 'Sender_gold', 'Sender_pred', 'Sender_recall')
+
     f1_duplicate = f1_score(
         merged_df["Duplicate_gold"], merged_df["Duplicate_pred"], pos_label="yes")
     f1_releasable = f1_score(merged_df["Site_Registry_Releaseable_gold"],
@@ -93,4 +128,4 @@ if __name__ == '__main__':
     merged_df = load_evaluation_dataframe()
 
     # Step 4: Compute F1 scores
-    compute_scores()
+    compute_scores(merged_df)
