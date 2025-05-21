@@ -30,7 +30,7 @@ This folder contains all modular helper scripts used by the main document classi
 ---
 
 ### `file_organizer.py`
-- Copies a file into `data/output/{DOC_TYPE}/` using its new standardized filename.
+- Copies a file into `data/output/{SITE_ID}/{YEAR}-{DOC_TYPE}/` using its new standardized filename. Also supports writing to `data/evaluation/output/...` when running in evaluation mode.
 - Automatically creates output directories if they don’t exist.
 - Designed to keep output files separate from the input dataset and repository.
 
@@ -59,7 +59,10 @@ This folder contains all modular helper scripts used by the main document classi
 ---
 
 ### `logger.py`
-- Logs structured metadata for each processed file to `logs/metadata_log.csv`.
+- Logs structured metadata for each processed file to a target .csv log file.
+- In normal mode, logs to `data/logs/metadata_log.csv`.
+- In evaluation mode, logs to `data/evaluation/evaluation_log.csv`.
+- Automatically initializes headers if the file doesn’t exist.
 - Supports logging fields including:
   - Original and new filename
   - Site ID
@@ -76,8 +79,14 @@ This folder contains all modular helper scripts used by the main document classi
 - Returns a 3–5 digit number if found at the start of the filename.
 - Used as the first-pass method before querying the LLM for site ID.
 - Provides duplicate detection using a two-step strategy:
-- First checks for full page-window containment using ROUGE-1 F1.
-- Falls back to RapidFuzz token sort ratio to handle OCR-distorted matches.
+  1.	Page-window ROUGE score (rouge1, rouge2, or rougeL)
+  2.	Fallback to RapidFuzz token-sort ratio if ROUGE fails
+  The function returns 3 values:
+  - `duplicate_status`: "contained", "likely_duplicate_ocr", or "no"
+  - `matched_file`: Path of the matched file
+  - `is_current_file_shorter`: True if current file has fewer pages (used to decide which file is tagged -DUP)
+  Searches for duplicates within all subfolders of the same Site ID.
+  
 - Searches across all output subfolders under the same site ID to catch misclassified duplicates.
 - Supports configurable thresholding and ROUGE metric selection.
 - Extracts document release eligibility by matching document types to a preloaded Excel lookup (site_registry_mapping.xlsx).
@@ -98,7 +107,10 @@ This folder contains all modular helper scripts used by the main document classi
 
 ### `rename.py`
 - Generates standardized output filenames in the format:
-  `YYYY-MM-DD – SITE_ID – TYPE.pdf`
+  `YYYY-MM-DD – SITE_ID – TYPE[-DUP][_n].pdf`
+    - Appends -DUP if the file is a confirmed duplicate
+    - Adds _n to resolve filename collisions
+    - Also returns the year string so the output folder can be named `{YEAR}-{DOC_TYPE}`
 - Site ID and document type are injected based on earlier steps.
 - Does **not** modify or move the file itself — just returns the new name string.
 
@@ -111,5 +123,3 @@ This folder contains all modular helper scripts used by the main document classi
 - Handles cases where the second address field is redundant or contains information not found in the first field.
 - Formats the address by combining the first address, second address (if needed), urban area, and postal code (if available).
 - Supports configurable fuzzy matching threshold to control redundancy detection.
-
-
