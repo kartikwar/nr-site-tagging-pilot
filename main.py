@@ -28,6 +28,28 @@ if USE_ML_CLASSIFIER:
         USE_ML_CLASSIFIER = False
 
 def main():
+    print("[Starting Pipeline Initialization]")
+
+    device = (
+        torch.device("mps") if torch.backends.mps.is_available()
+        else torch.device("cuda") if torch.cuda.is_available()
+        else torch.device("cpu")
+    )
+
+    print(f"Using device: {device}")
+
+    USE_ML_CLASSIFIER = True
+
+    try:
+        model_path = os.path.join(
+            "models", "document_classification_model")
+        load_huggingface_model(model_path, device)
+        print("[ML Classifier] Model loaded ")
+    except Exception as e:
+        print(f"[ML Classifier] Failed to load model: {e}")
+        USE_ML_CLASSIFIER = False
+
+    print(f"value of USE ML {USE_ML_CLASSIFIER}")
 
     # flagged_for_review dictionary acts as a lookup table for all documents with fields that are low-certainty or unverified.
     # Structure is {'filename':['uncertain_fields_here']}
@@ -43,11 +65,28 @@ def main():
     input_dir = config.INPUT_DIR
     output_dir = config.OUTPUT_DIR
     log_path = config.LOG_PATH
+    lookups_path = config.LOOKUPS_PATH
+
+    # Directory and Lookup File checks, if they do not exist program shuts down gracefully
+    required_files = [
+        lookups_path / "site_registry_mapping.xlsx",
+        lookups_path / "site_ids.csv"
+    ]
+
+    required_dirs = [
+        input_dir,
+        output_dir,
+        lookups_path,
+    ]
+
+    verify_required_dirs(required_dirs)
+    verify_required_files(required_files)
+
     # Main prompt to extract metadata fields
     prompt_path = Path("prompts/metadata_prompt.txt")
 
     # Additional re-prompts for the LLM, only called if the first pass misses an important field
-    #address_reprompt_path = Path("prompts/address_reprompt.txt")
+    # address_reprompt_path = Path("prompts/address_reprompt.txt")
     site_id_reprompt_path = Path("prompts/site_id_reprompt.txt")
     title_reprompt_path = Path("prompts/title_reprompt.txt")
     sender_reprompt_path = Path("prompts/sender_reprompt.txt")
@@ -61,8 +100,8 @@ def main():
     files = load_pdfs(input_dir)
 
     init_log(log_path, headers=[
-        "original_filename", "new_filename", "site_id", "document_type", "title", 
-        "receiver", "sender", "address", "readable", "output_path"
+        "Original_Filename", "New_Filename", "Site_id", "Document_Type", "Site_Registry_Releaseable", "Title",
+        "Receiver", "Sender", "Address", "Duplicate", "Similarity_Score", "Readable", "Output_Path"
     ])
 
     if not files:
@@ -70,6 +109,10 @@ def main():
         return
 
     for file_path in files:
+        print("\n" + "=" * 100)
+        print(f"[STARTING] Processing file: {file_path.name}")
+        print("=" * 100 + "\n")
+
         filename = file_path.name
         site_id = extract_site_id_from_filename(filename)
 
@@ -80,9 +123,10 @@ def main():
 
         # Extract only first 8 pages of text
         text = extract_text_from_pdf(file_path, max_pages=8)
-
+        text = clean_ocr_text(text)
+        
         # If OCR cleaned text has little to no content, automatically consider this document unreadable.
-        if len(clean_ocr_text(text).split()) < 50:
+        if len(text.split()) < 50:
             metadata_dict = {
             "site_id": "none",
             "title": "none",
@@ -96,27 +140,28 @@ def main():
 
         # Otherwise, prompt LLM.
         else:
-            prompt = load_prompt_template(prompt_path,  clean_ocr_text(text))
-            metadata_dict = query_llm(prompt, model="mistral")
+          prompt = load_prompt_template(prompt_path,  text)
 
-            # If title extraction fails on a readable document, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
-            metadata_retries = 0
-            while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and not metadata_dict['readable'].strip().lower() == 'no' and metadata_retries<5:
-                print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
-                metadata_dict = query_llm(prompt, model="mistral")
-                metadata_retries += 1
+          # Querying LLM to extract metadata attributes
+          metadata_dict = query_llm(prompt, model="mistral")
 
-            # Null title, sender, receiver and flag if document is NOT readable.
-            if metadata_dict['readable'].strip().lower() == 'no':
-                metadata_dict['title'] = 'none'
-                metadata_dict['sender'] = 'none'
-                metadata_dict['receiver'] = 'none'
-                flagged_for_review[filename].append('unreadable')
-                print(f"{filename} flagged for manual review: UNREADABLE")
+          # If title extraction fails on a readable document, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
+          metadata_retries = 0
+          while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and not metadata_dict['readable'].strip().lower() == 'no' and metadata_retries<5:
+              print(f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
+              metadata_dict = query_llm(prompt, model="mistral")
+              metadata_retries += 1
+
+          # Null title, sender, receiver and flag if document is NOT readable.
+          if metadata_dict['readable'].strip().lower() == 'no':
+              metadata_dict['title'] = 'none'
+              metadata_dict['sender'] = 'none'
+              metadata_dict['receiver'] = 'none'
+              flagged_for_review[filename].append('unreadable')
+              print(f"{filename} flagged for manual review: UNREADABLE")
         
         # If document IS readable, verify title, sender, and receiver fields.
         if metadata_dict['readable'].strip().lower() != 'no':
-
             validate_and_reprompt_field('title', 25, title_reprompt_path, metadata_dict, clean_ocr_text(text), filename, flagged_for_review)
             validate_and_reprompt_field('sender', 17, sender_reprompt_path, metadata_dict, clean_ocr_text(text), filename, flagged_for_review)
             validate_and_reprompt_field('receiver', 17, receiver_reprompt_path, metadata_dict, clean_ocr_text(text), filename, flagged_for_review)
@@ -153,7 +198,7 @@ def main():
             metadata_dict['address'] = get_site_address(csv_path='../data/lookups/site_ids.csv', site_id=int(site_id))
         except:
             print(f"Address for site ID {site_id} not found in CSV registry! Defaulting to LLM-extracted address.")
-            
+
         # If an address is extracted and no address is recorded for this site ID yet, save it in dict.
         if metadata_dict['address'].lower() != 'none':
             if site_id_address_dict.get(site_id) is None:
@@ -165,35 +210,99 @@ def main():
             metadata_dict['address'] = site_id_address_dict[site_id]
         
         # Now get document type
-        doc_type = classify_document(file_path, {"site_id": site_id, "title": metadata_dict.get("title", "")}, mode="ml" if USE_ML_CLASSIFIER else "regex")
-        # Generate filename after doc_type is available
-        new_filename = generate_new_filename(file_path, site_id=site_id, doc_type=doc_type)
 
-        output_path = output_dir / doc_type / new_filename
+        title = metadata_dict.get("title", "").strip()
+        if (not title) or (title == 'none') or (USE_ML_CLASSIFIER == False):
+            print(f"Using regex mode")
+            doc_type = classify_document(file_path, device, {"site_id": site_id, "title": metadata_dict.get(
+                "title", "")}, mode="regex")
+        else:
+            print(f"Using ml mode for {title}")
+            doc_type = classify_document(file_path, device, {"site_id": site_id, "title": metadata_dict.get(
+                "title", "")}, mode="ml")
 
-        print(f"Filename:\n{filename}")
+        print(f"document type is {doc_type} for {file_path}")
+
+       # Duplicate check – uses two-step rule (ROUGE + RapidFuzz)
+        duplicate_status, matched_path, is_current_file_shorter, similarity_score = check_duplicate_by_rouge(
+            current_text=file_path,
+            site_id=site_id,
+            site_id_dir=output_dir / site_id
+        )
+        # Only mark as duplicate if this file is shorter than the matched one
+        if duplicate_status != "no" and not is_current_file_shorter:
+            print(
+                "[DUPLICATE IGNORED] Current file is longer or equal in length. Skipping duplicate flag.")
+            duplicate_status = "no"
+            matched_path = None
+        else:
+            print(
+                "[DUPLICATE CONFIRMED] Current file is shorter. Will be tagged as -DUP.")
+
+        # Site Registry Releasable Check
+        if duplicate_status != "no":
+            releasable = "No (duplicate)"
+        else:
+            releasable = get_site_registry_releasable(
+                doc_type, lookups_path / "site_registry_mapping.xlsx"
+            )
+
+        # Generate filename after duplicate logic
+        # Step 1: Get year (don't pass output_dir yet)
+        temp_filename, year = generate_new_filename(
+            file_path,
+            site_id=site_id,
+            doc_type=doc_type,
+            duplicate=(duplicate_status != "no"),
+            output_dir=None  # avoid using 'year' before it's defined
+        )
+
+        # Step 2: Now that you have year, build final path and call again
+        final_output_dir = output_dir / site_id / f"{year}-{doc_type.upper()}"
+
+        new_filename, _ = generate_new_filename(
+            file_path,
+            site_id=site_id,
+            doc_type=doc_type,
+            duplicate=(duplicate_status != "no"),
+            output_dir=final_output_dir
+        )
+
+        output_path = final_output_dir / new_filename
+
         print("\nmetadata response:\n", metadata_dict)
         print("final site id: ", site_id)
-        gold_data = load_gold_data(filename, '../data/lookups/clean_metadata.csv')
+        gold_data = load_gold_data(
+            filename, '../data/lookups/clean_metadata.csv')
         print("\ngold response:\n", gold_data)
         print('\n----\n')
 
+        print("final site id:", site_id, filename)
+        print(f"[DUPLICATE STATUS] {duplicate_status}")
+        print(f"[RELEASABLE] {releasable}")
 
-        
         organize_files(file_path, output_path)
         log_metadata(log_path, {
-            "original_filename": file_path.name,
-            "new_filename": new_filename,
-            "site_id": site_id,
-            "document_type": doc_type,
-            "title": metadata_dict.get("title", "none"),
-            "receiver": metadata_dict.get("receiver", "none"),
-            "sender": metadata_dict.get("sender", "none"),
-            "address": metadata_dict.get("address", "none"),
-            "readable": metadata_dict.get("readable", "no"),
-            "output_path": str(output_path)
+            "Original_Filename": file_path.name,
+            "New_Filename": new_filename,
+            "Site_id": site_id,
+            "Document_Type": doc_type,
+            "Site_Registry_Releaseable": releasable,
+            "Title": metadata_dict.get("title", "none"),
+            "Receiver": metadata_dict.get("receiver", "none"),
+            "Sender": metadata_dict.get("sender", "none"),
+            "Address": metadata_dict.get("address", "none"),
+            "Duplicate": duplicate_status,
+            "Similarity_Score": similarity_score if similarity_score is not None else "",
+            "Readable": metadata_dict.get("readable", "no"),
+            "Output_Path": str(output_path)
         })
 
+        print("\n" + "-" * 100)
+        print(f"[COMPLETED] {file_path.name}")
+        print("-" * 100)
+
+    
     print("===============================================================\nThe following documents have been flagged for human review:\n===============================================================\n")
     for key, value_list in flagged_for_review.items():
         print("\nDocument ", key)

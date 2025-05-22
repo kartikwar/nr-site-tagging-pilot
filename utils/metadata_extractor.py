@@ -63,44 +63,25 @@ def _best_window_min_f1(shorter_pages, longer_pages, scorer) -> float:
 
 def check_duplicate_by_rouge(
         current_text,
-        site_id: str,           # kept for API compatibility
+        site_id: str,
         site_id_dir: Path,
         rouge_th: float = 0.75,
         rapid_th: float = 78.0,
         rouge_metric: str = "rouge1",
-) -> str:
-    
+) -> tuple[str, Path | None, bool, float]:
     """
     Two-step duplicate detector.
 
-    Parameters
-    ----------
-    current_text : Union[str, Path]
-        Either the path to the current PDF **or** its cleaned text.
-    site_id_dir : Path
-        Folder that contains candidate PDFs for the same Site ID.
-    rouge_th : float
-        Page-window ROUGE-1 F1 cut-off (default 0.75).
-    rapid_th : float
-        RapidFuzz token-sort ratio cut-off when ROUGE fails (default 78 %).
-    rouge_metric : str
-        'rouge1', 'rouge2', or 'rougeL' – we use 'rouge1' by default.
-
-    Returns
-    -------
-    str
-        'contained'              – every page of the shorter doc is in a longer doc  
-        'likely_duplicate_ocr'   – ROUGE below cut-off but RapidFuzz ≥ rapid_th  
-        'no'                     – not a duplicate
+    Returns:
+        (duplicate_status, matched_file_path, is_current_file_shorter, similarity_score)
     """
     scorer = rouge_scorer.RougeScorer([rouge_metric], use_stemmer=True)
 
     try:
-        cur_doc   = fitz.open(current_text) if isinstance(current_text, (str, Path)) else None
+        cur_doc = fitz.open(current_text) if isinstance(current_text, (str, Path)) else None
     except Exception:
         cur_doc = None
 
-    # If we were passed raw text, wrap it as single page
     if cur_doc:
         cur_pages = [_clean(p.get_text()) for p in cur_doc]
         cur_doc.close()
@@ -108,14 +89,12 @@ def check_duplicate_by_rouge(
         cur_pages = [_clean(current_text)]
 
     if not site_id_dir.exists():
-        return "no"
+        return "no", None, False, 0.0
 
     for root, _, files in os.walk(site_id_dir):
         for file in files:
             if not file.lower().endswith(".pdf"):
                 continue
-
-            # Optional: only check PDFs with same Site ID in filename
             if site_id and str(site_id) not in file:
                 continue
 
@@ -126,20 +105,20 @@ def check_duplicate_by_rouge(
                 print(f"[WARN] {cand_path.name}: {e}")
                 continue
 
-            # ensure cur_pages is shorter
             a, b = (cur_pages, cand_pages) if len(cur_pages) <= len(cand_pages) else (cand_pages, cur_pages)
+            is_shorter = len(cur_pages) <= len(cand_pages)
 
-            # ---- page-window ROUGE ----
-            if _best_window_min_f1(a, b, scorer) >= rouge_th:
+            rouge_score = _best_window_min_f1(a, b, scorer)
+            if rouge_score >= rouge_th:
                 print(f"[CONTAINED] {file}")
-                return "contained"
+                return "contained", cand_path, is_shorter, rouge_score
 
-            # ---- RapidFuzz fallback ----
-            if fuzz.token_sort_ratio(" ".join(a), " ".join(b)) >= rapid_th:
+            rapid_score = fuzz.token_sort_ratio(" ".join(a), " ".join(b))
+            if rapid_score >= rapid_th:
                 print(f"[LIKELY DUPLICATE (OCR)] {file}")
-                return "likely_duplicate_ocr"
+                return "likely_duplicate_ocr", cand_path, is_shorter, rapid_score / 100.0
 
-    return "no"
+    return "no", None, False, 0.0
 
 
 _release_df = None  # cache for loaded Excel
