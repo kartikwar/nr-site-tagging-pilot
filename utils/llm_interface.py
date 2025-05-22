@@ -26,7 +26,7 @@ def query_llm(prompt, model="llama2", system_prompt=None):
             "receiver": "none",
             "sender": "none",
             "address": "none",
-            "readable": "none"
+            "readable": "no"
         }
         
     return metadata_dict
@@ -81,3 +81,34 @@ def field_is_well_formed(field, text, length):
     if len(field.split()) < length and all_words_in_text(field, text):
         return True
     return False
+
+def validate_and_reprompt_field(field_name, length, reprompt_path, metadata_dict, text, filename, flagged_for_review, max_retries=5):
+    """
+    Validates a metadata field and attempts to re-prompt it up to `max_retries` times if not well-formed.
+    Flags the field for manual review if still not valid after retries.
+
+    field_name (str): the metadata_dict key whose value is to be verified/modified.
+    length (int): the maximum acceptable length for the field.
+    reprompt_path (Path): the path of the prompt template for the field to be re-prompted.
+    metadata_dict (dict): the full metadata_dict object being verified.
+    text (str): the full cleaned OCR text.
+    filename (str): the full filename.
+    flagged_for_review (defaultdict): the dictionary containing flags for unverifiable fields.
+    max_retries (int): the maximum number of re-prompting attempts before giving up/proceeding.
+    """
+    field_value = metadata_dict[field_name].strip().lower()
+    if field_value != 'none':
+        retries = 0
+        while (
+            metadata_dict[field_name].strip().lower() != 'none' and
+            not field_is_well_formed(metadata_dict[field_name], text, length=length) and
+            retries < max_retries
+        ):
+            print(f"Retrying {field_name} extraction, attempt {retries + 1}/{max_retries}")
+            reprompt = load_prompt_template(reprompt_path, text)
+            metadata_dict[field_name] = llm_single_field_query(reprompt, model="mistral")
+            retries += 1
+
+        if metadata_dict[field_name].strip().lower() != 'none' and not field_is_well_formed(metadata_dict[field_name], text, length=length):
+            flagged_for_review[filename].append(field_name)
+            print(f"{filename} flagged for manual review: {field_name.upper()}")
