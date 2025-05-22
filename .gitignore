@@ -8,3 +8,7 @@ clean_metadata.csv
 # Ignore best_model and models folders
 best_model/
 models/
+models/document_classification_model/
+models/document_classification_model/
+models/document_classification_model/
+dupes/
