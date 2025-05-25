@@ -5,36 +5,74 @@ from pathlib import Path
 from config import INPUT_DIR, OUTPUT_DIR, LOG_PATH, GOLD_FILES_DIR, GOLD_METADATA_PATH, EVALUATION_DIR
 from main import main
 from rouge_score import rouge_scorer
-
-
+import os
+from utils.checks import verify_required_dirs, verify_required_files
 import config
+
+
 config.INPUT_DIR = config.GOLD_FILES_DIR
 config.OUTPUT_DIR = config.EVALUATION_DIR / "output"
 OUTPUT_DIR = config.OUTPUT_DIR
 config.LOG_PATH = config.EVALUATION_DIR / "evaluation_log.csv"
-LOG_PATH = config.EVALUATION_DIR / "evaluation_log.csv"
-config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-config.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+LOG_PATH = config.LOG_PATH
 
 
 def files_preparation():
-    # Just clear the previous evaluation log
-    if LOG_PATH.exists():
-        LOG_PATH.unlink()
+    """
+    Clears all contents in the evaluation directory before evaluation.
+    Recreates output and log directories if they don't exist.
+    """
 
-    # Do NOT touch INPUT_DIR or copy any files
+    # 🔐 Safety guard to prevent accidental deletion of unrelated directories
+    if "evaluation" not in str(config.EVALUATION_DIR).lower():
+        raise RuntimeError(f"Aborting: EVALUATION_DIR '{config.EVALUATION_DIR}' does not appear safe to wipe.")
+
+    # Delete all contents inside EVALUATION_DIR
+    if config.EVALUATION_DIR.exists():
+        for item in config.EVALUATION_DIR.iterdir():
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                shutil.rmtree(item)
+
+    # Recreate required directories
+    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    config.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def normalize_columns(df, columns):
+    """
+    Lowercases and strips whitespace from gold and predicted versions of specified columns.
+    """
     for column in columns:
-        df[column + "_gold"] = df[column + "_gold"].str.lower(
-        ).str.strip()
-        df[column + "_pred"] = df[column + "_pred"].str.lower(
-        ).str.strip()
+        df[column + "_gold"] = df[column + "_gold"].str.lower().str.strip()
+        df[column + "_pred"] = df[column + "_pred"].str.lower().str.strip()
+
     return df
 
 
+def remove_prefix_labels(df, label_columns):
+    """
+    Removes leading labels (e.g., 'receiver:', 'sender:') with optional whitespace and colon from both gold and predicted columns.
+    """
+    for column in label_columns:
+        pattern = rf"^{column.lower()}\s*:\s*"  # e.g., "receiver\s*:\s*"
+        for suffix in ["_gold", "_pred"]:
+            full_col = column + suffix
+            df[full_col] = df[full_col].str.replace(pattern, "", regex=True)
+            
+    return df
+
+
+
 def load_evaluation_dataframe():
+    """
+    Loads and merges gold and predicted metadata, normalizing relevant columns for evaluation.
+    
+    Returns:
+        pd.DataFrame: Cleaned and merged evaluation DataFrame.
+    """
+    
     pred_df = pd.read_csv(LOG_PATH)
     gold_df = pd.read_csv(GOLD_METADATA_PATH, header=3, encoding='ISO-8859-1')
 
@@ -47,7 +85,8 @@ def load_evaluation_dataframe():
         "Duplicate  (Y/N)": "Duplicate",
         'Site Registry releaseable': 'Site_Registry_Releaseable',
         'Title/Subject': 'Title',
-        'Sender/Author': 'Sender'
+        'Sender/Author': 'Sender',
+        'Document Type': 'Document_Type'
     }
 
     gold_df = gold_df.rename(columns=rename_dict)
@@ -86,67 +125,125 @@ def load_evaluation_dataframe():
 
     # Normalize other string columns for ROUGE comparison
     merged_df = normalize_columns(
+        merged_df, ["Title", "Sender", "Receiver", "Document_Type", "Address"]
+    )
+
+    # Removing prefix lables like "Receiver: " etc from gold and pred text
+    merged_df = remove_prefix_labels(
         merged_df, ["Title", "Sender", "Receiver"]
     )
 
     return merged_df
 
 
-def get_rouge1_recall(gold, pred):
-    if not isinstance(gold, str) or not isinstance(pred, str):
-        return 0.0
-    scorer = rouge_scorer.RougeScorer(['rouge1'], use_stemmer=True)
-    score = scorer.score(gold, pred)['rouge1']
-    return score.recall
 
+def compute_row_rouge_recalls(row, col_pairs, scorer):
+    """
+    Calculates ROUGE-1 recall for each (gold, pred) text column pair in a row.
 
-def compute_rouge_recall(df, gol_col, pred_col, store_as):
-    df[store_as] = df.apply(
-        lambda row: get_rouge1_recall(row[gol_col], row[pred_col]), axis=1)
-    return df
+    Returns a Series with recall scores named as '{attribute}_recall'.
+    """
+    results = {}
+    for gold_col, pred_col in col_pairs:
+        gold, pred = row[gold_col], row[pred_col]
+        if isinstance(gold, str) and isinstance(pred, str):
+            score = scorer.score(gold, pred)['rouge1'].recall
+        else:
+            score = 0.0
+        attr_name = gold_col.replace('_gold', '')  # safer and clearer
+        results[f"{attr_name}_recall"] = score
+    return pd.Series(results)
 
 
 def compute_scores(merged_df):
-    # Compute ROUGE recall scores for text fields
-    merged_df = compute_rouge_recall(merged_df, 'Title_gold', 'Title_pred', 'Title_recall')
-    merged_df = compute_rouge_recall(merged_df, 'Receiver_gold', 'Receiver_pred', 'Receiver_recall')
-    merged_df = compute_rouge_recall(merged_df, 'Sender_gold', 'Sender_pred', 'Sender_recall')
+    """
+    Compute ROUGE-1 recall for text fields and classification metrics (F1, precision, recall)
+    for discrete labels. Saves two output files: a detailed row-level output and a summary.
+    """
+    # -----------------------
+    # Compute ROUGE-1 recalls
+    # -----------------------
+    scorer = rouge_scorer.RougeScorer(['rouge1'], use_stemmer=True)
+    rouge_col_pairs = [
+        ('Title_gold', 'Title_pred'),
+        ('Receiver_gold', 'Receiver_pred'),
+        ('Sender_gold', 'Sender_pred'),
+        ('Address_gold', 'Address_pred')
+    ]
+    recall_df = merged_df.apply(lambda row: compute_row_rouge_recalls(row, rouge_col_pairs, scorer), axis=1)
+    merged_df = pd.concat([merged_df, recall_df], axis=1)
 
-    # Compute classification metrics for 'Duplicate'
-    f1_duplicate = f1_score(merged_df["Duplicate_gold"], merged_df["Duplicate_pred"], pos_label="yes", zero_division=1)
-    precision_duplicate = precision_score(merged_df["Duplicate_gold"], merged_df["Duplicate_pred"], pos_label="yes", zero_division=1)
-    recall_duplicate = recall_score(merged_df["Duplicate_gold"], merged_df["Duplicate_pred"], pos_label="yes", zero_division=1)
+    # ----------------------------------
+    # Classification metric calculations
+    # ----------------------------------
+    class_metrics = {}
+    for attr in ['Duplicate', 'Site_Registry_Releaseable']:
+        y_true = merged_df[f"{attr}_gold"]
+        y_pred = merged_df[f"{attr}_pred"]
+        f1 = f1_score(y_true, y_pred, pos_label="yes", zero_division=1) 
+        prec = precision_score(y_true, y_pred, pos_label="yes", zero_division=1)
+        rec = recall_score(y_true, y_pred, pos_label="yes", zero_division=1)
 
-    # Compute classification metrics for 'Site_Registry_Releaseable'
-    f1_releasable = f1_score(merged_df["Site_Registry_Releaseable_gold"], merged_df["Site_Registry_Releaseable_pred"], pos_label="yes", zero_division=1)
-    precision_releasable = precision_score(merged_df["Site_Registry_Releaseable_gold"], merged_df["Site_Registry_Releaseable_pred"], pos_label="yes", zero_division=1)
-    recall_releasable = recall_score(merged_df["Site_Registry_Releaseable_gold"], merged_df["Site_Registry_Releaseable_pred"], pos_label="yes", zero_division=1)
+        class_metrics[attr] = {
+            'F1': f1,
+            'Precision': prec,
+            'Recall': rec
+        }
 
-    # Print results
-    print("\n===== DUPLICATE =====")
-    print(f"Precision: {precision_duplicate:.4f}")
-    print(f"Recall:    {recall_duplicate:.4f}")
-    print(f"F1 Score:  {f1_duplicate:.4f}")
+        # Log to console
+        print(f"\n===== {attr.upper()} =====")
+        print(f"Precision: {prec:.4f}")
+        print(f"Recall:    {rec:.4f}")
+        print(f"F1 Score:  {f1:.4f}")
 
-    print("\n===== SITE REGISTRY RELEASABLE =====")
-    print(f"Precision: {precision_releasable:.4f}")
-    print(f"Recall:    {recall_releasable:.4f}")
-    print(f"F1 Score:  {f1_releasable:.4f}")
-
-    # Log scores into DataFrame (as constants for every row)
-    merged_df["F1_Score_Duplicate"] = f1_duplicate
-    merged_df["Precision_Duplicate"] = precision_duplicate
-    merged_df["Recall_Duplicate"] = recall_duplicate
-
-    merged_df["F1_Score_Site_Registry_Releaseable"] = f1_releasable
-    merged_df["Precision_Site_Registry_Releaseable"] = precision_releasable
-    merged_df["Recall_Site_Registry_Releaseable"] = recall_releasable
-
-    # Save for inspection
+    # ----------------------------
+    # Save row-level evaluation
+    # ----------------------------
     merged_df.to_csv(config.EVALUATION_DIR / "evaluation_merged_output.csv", index=False)
+
+    # ------------------------------------
+    # Save summary metrics (aggregated)
+    # ------------------------------------
+    summary_data = []
+
+    # Classification metrics
+    for attr, scores in class_metrics.items():
+        summary_data.append({
+            'Attribute': attr,
+            'F1': scores['F1'],
+            'Recall': scores['Recall'],
+            'Precision': scores['Precision']
+        })
+
+    # ROUGE attributes – recall only
+    for gold_col, _ in rouge_col_pairs:
+        attr_name = gold_col.replace('_gold', '')
+        avg_recall = merged_df[f"{attr_name}_recall"].mean()
+        summary_data.append({
+            'Attribute': attr_name,
+            'F1': None,
+            'Recall': avg_recall,
+            'Precision': None
+        })
+
+    summary_df = pd.DataFrame(summary_data)
+    summary_df.to_csv(config.EVALUATION_DIR / "evaluation_summary_metrics.csv", index=False)
+
 
 
 if __name__ == '__main__':
+
+    
+    
+    # Lookup File checks, if they do not exist program shuts down gracefully
+    lookups_path = config.LOOKUPS_PATH
+    
+    required_files = [
+        lookups_path / "clean_metadata.csv"
+    ]
+
+    verify_required_files(required_files)
+    
     # Step 1: Prepare files
     files_preparation()
 

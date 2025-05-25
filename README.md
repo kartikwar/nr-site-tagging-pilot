@@ -134,6 +134,8 @@ Each processed PDF will appear in `outputs/Site_ID/YYYY-DOC_TYPE/` with a new st
 - Sender                       → Person or organization that authored/submitted the document
 - Address                      → Site or project location
 - Duplicate                    → "yes" if flagged as a duplicate, otherwise "no"
+- Duplicate_File               → duplicate filename if flagged as a duplicate, otherwise ""
+- Similarity_Score             → duplicate similarity score if flagged as a duplicate, otherwise ""
 - Readable                     → "yes" if the document was mostly readable, otherwise "no"
 - Output_Path                  → Full path to the renamed file in the output directory
 

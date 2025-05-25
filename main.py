@@ -3,16 +3,18 @@ import re
 from pathlib import Path
 from utils.loader import load_pdfs, extract_text_from_pdf, clean_ocr_text
 from utils.rename import generate_new_filename
-from utils.classifier import classify_document
+from utils.classifier import classify_document, load_huggingface_model
 from utils.file_organizer import organize_files
 from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template, field_is_well_formed, validate_and_reprompt_field
-from utils.logger import init_log, log_metadata
-from utils.metadata_extractor import extract_site_id_from_filename
+from utils.logger import init_log, log_metadata, update_log_row
+from utils.metadata_extractor import extract_site_id_from_filename, check_duplicate_by_rouge, get_site_registry_releasable
 from utils.gold_data_extraction import load_gold_data
 from utils.site_id_to_address import get_site_address
+from utils.checks import verify_required_dirs, verify_required_files
 import config
 import ollama
 from collections import defaultdict
+import os
 
 # Toggle this to enable ML-based classification (if model is available)
 USE_ML_CLASSIFIER = False
@@ -101,7 +103,7 @@ def main():
 
     init_log(log_path, headers=[
         "Original_Filename", "New_Filename", "Site_id", "Document_Type", "Site_Registry_Releaseable", "Title",
-        "Receiver", "Sender", "Address", "Duplicate", "Similarity_Score", "Readable", "Output_Path"
+        "Receiver", "Sender", "Address", "Duplicate", "Duplicate_File", "Similarity_Score", "Readable", "Output_Path"
     ])
 
     if not files:
@@ -223,22 +225,57 @@ def main():
 
         print(f"document type is {doc_type} for {file_path}")
 
-       # Duplicate check – uses two-step rule (ROUGE + RapidFuzz)
+        # Updated Duplicate check – ROUGE + RapidFuzz
         duplicate_status, matched_path, is_current_file_shorter, similarity_score = check_duplicate_by_rouge(
-            current_text=file_path,
+            current_file_path=file_path,
             site_id=site_id,
             site_id_dir=output_dir / site_id
         )
-        # Only mark as duplicate if this file is shorter than the matched one
-        if duplicate_status != "no" and not is_current_file_shorter:
-            print(
-                "[DUPLICATE IGNORED] Current file is longer or equal in length. Skipping duplicate flag.")
+        
+        duplicate_file = ""
+        
+        if duplicate_status != "no" and is_current_file_shorter:
+            print("[DUPLICATE CONFIRMED] Current file is shorter. Will be tagged as -DUP.")
+            duplicate_file = matched_path.name
+            duplicate_status = "yes"
+        
+        elif duplicate_status != "no" and not is_current_file_shorter:
+            print("[REVERSE DUPLICATE] Current file is longer. Updating matched file as duplicate.")
+        
+            # Rename matched file to add -DUP
+            matched_output_dir = matched_path.parent
+            matched_new_name, _ = generate_new_filename(
+                matched_path,
+                site_id=site_id,
+                doc_type=doc_type,
+                duplicate=True,
+                output_dir=matched_output_dir
+            )
+            matched_output_path = matched_output_dir / matched_new_name
+            matched_path.rename(matched_output_path)
+        
+            # Update matched file's log entry
+            update_log_row(
+                log_path,
+                original_filename=matched_path.name,
+                updated_values={
+                    "Duplicate": "yes",
+                    "Duplicate_File": file_path.name,
+                    "Site_Registry_Releaseable": "No (duplicate)",
+                    "New_Filename": matched_new_name,
+                    "Output_Path": str(matched_output_path)
+                }
+            )
+        
+            # Do NOT mark current file as duplicate
             duplicate_status = "no"
-            matched_path = None
+            duplicate_file = ""
+        
         else:
-            print(
-                "[DUPLICATE CONFIRMED] Current file is shorter. Will be tagged as -DUP.")
+            duplicate_status = "no"
+            duplicate_file = ""
 
+            
         # Site Registry Releasable Check
         if duplicate_status != "no":
             releasable = "No (duplicate)"
@@ -293,6 +330,7 @@ def main():
             "Sender": metadata_dict.get("sender", "none"),
             "Address": metadata_dict.get("address", "none"),
             "Duplicate": duplicate_status,
+            "Duplicate_File": duplicate_file,
             "Similarity_Score": similarity_score if similarity_score is not None else "",
             "Readable": metadata_dict.get("readable", "no"),
             "Output_Path": str(output_path)
