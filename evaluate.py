@@ -19,24 +19,25 @@ LOG_PATH = config.LOG_PATH
 
 def files_preparation():
     """
-    Clears all contents in the evaluation directory before evaluation.
-    Recreates output and log directories if they don't exist.
+    Clears all contents in EVALUATION_DIR except the 'output' folder.
+    Recreates necessary log directory structure if missing.
     """
 
-    # 🔐 Safety guard to prevent accidental deletion of unrelated directories
+    # 🔐 Safety guard to avoid dangerous deletion
     if "evaluation" not in str(config.EVALUATION_DIR).lower():
         raise RuntimeError(f"Aborting: EVALUATION_DIR '{config.EVALUATION_DIR}' does not appear safe to wipe.")
 
-    # Delete all contents inside EVALUATION_DIR
+    # Delete everything inside EVALUATION_DIR except 'output'
     if config.EVALUATION_DIR.exists():
         for item in config.EVALUATION_DIR.iterdir():
+            if item.name == "output":
+                continue  # Skip the output folder
             if item.is_file():
                 item.unlink()
             elif item.is_dir():
                 shutil.rmtree(item)
 
-    # Recreate required directories
-    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Ensure log directory exists
     config.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
