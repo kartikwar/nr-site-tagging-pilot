@@ -50,27 +50,27 @@ _space = re.compile(r"\s+")
 def _clean(txt: str) -> str:
     return _space.sub(" ", txt.lower().translate(_punct)).strip()
 
-def _best_window_min_f1(shorter_pages, longer_pages, scorer) -> float:
-    best = 0.0
-    for i in range(len(longer_pages) - len(shorter_pages) + 1):
-        window = longer_pages[i:i+len(shorter_pages)]
-        worst = min(
-            scorer.score(a, b)["rouge1"].fmeasure
-            for a, b in zip(shorter_pages, window)
-        )
-        best = max(best, worst)
-    return best
+# def _best_window_min_f1(shorter_pages, longer_pages, scorer) -> float:
+#     best = 0.0
+#     for i in range(len(longer_pages) - len(shorter_pages) + 1):
+#         window = longer_pages[i:i+len(shorter_pages)]
+#         worst = min(
+#             scorer.score(a, b)["rouge1"].fmeasure
+#             for a, b in zip(shorter_pages, window)
+#         )
+#         best = max(best, worst)
+#     return best
 
 def check_duplicate_by_rouge(
-        current_text,
-        site_id: str,
-        site_id_dir: Path,
-        rouge_th: float = 0.75,
-        rapid_th: float = 78.0,
-        rouge_metric: str = "rouge1",
+    current_file_path: Path,
+    site_id: str,
+    site_id_dir: Path,
+    rouge_th: float = 0.75,
+    rapid_th: float = 78.0,
+    rouge_metric: str = "rouge1"
 ) -> tuple[str, Path | None, bool, float]:
     """
-    Two-step duplicate detector.
+    Two-step duplicate detector comparing full document text using ROUGE and RapidFuzz.
 
     Returns:
         (duplicate_status, matched_file_path, is_current_file_shorter, similarity_score)
@@ -78,15 +78,11 @@ def check_duplicate_by_rouge(
     scorer = rouge_scorer.RougeScorer([rouge_metric], use_stemmer=True)
 
     try:
-        cur_doc = fitz.open(current_text) if isinstance(current_text, (str, Path)) else None
-    except Exception:
-        cur_doc = None
-
-    if cur_doc:
-        cur_pages = [_clean(p.get_text()) for p in cur_doc]
+        cur_doc = fitz.open(current_file_path)
+        cur_text = " ".join([clean_ocr_text(page.get_text()) for page in cur_doc])
         cur_doc.close()
-    else:
-        cur_pages = [_clean(current_text)]
+    except Exception:
+        return "no", None, False, 0.0
 
     if not site_id_dir.exists():
         return "no", None, False, 0.0
@@ -99,24 +95,34 @@ def check_duplicate_by_rouge(
                 continue
 
             cand_path = Path(root) / file
+            if cand_path.resolve() == current_file_path.resolve():
+                continue
+
             try:
-                cand_pages = [_clean(p.get_text()) for p in fitz.open(cand_path)]
+                cand_doc = fitz.open(cand_path)
+                cand_text = " ".join([clean_ocr_text(p.get_text()) for p in cand_doc])
+                cand_doc.close()
             except Exception as e:
                 print(f"[WARN] {cand_path.name}: {e}")
                 continue
 
-            a, b = (cur_pages, cand_pages) if len(cur_pages) <= len(cand_pages) else (cand_pages, cur_pages)
-            is_shorter = len(cur_pages) <= len(cand_pages)
+            is_current_file_shorter = len(cur_text) <= len(cand_text)
 
-            rouge_score = _best_window_min_f1(a, b, scorer)
-            if rouge_score >= rouge_th:
-                print(f"[CONTAINED] {file}")
-                return "contained", cand_path, is_shorter, rouge_score
+            # ROUGE Recall
+            if is_current_file_shorter:
+                recall_score = scorer.score(cand_text, cur_text)[rouge_metric].recall
+            else:
+                recall_score = scorer.score(cur_text, cand_text)[rouge_metric].recall
 
-            rapid_score = fuzz.token_sort_ratio(" ".join(a), " ".join(b))
+            if recall_score >= rouge_th:
+                print(f"[CONTAINED by ROUGE] {file}")
+                return "contained", cand_path, is_current_file_shorter, recall_score
+
+            # RapidFuzz fallback
+            rapid_score = fuzz.token_sort_ratio(cur_text, cand_text)
             if rapid_score >= rapid_th:
                 print(f"[LIKELY DUPLICATE (OCR)] {file}")
-                return "likely_duplicate_ocr", cand_path, is_shorter, rapid_score / 100.0
+                return "likely_duplicate_ocr", cand_path, is_current_file_shorter, rapid_score / 100.0
 
     return "no", None, False, 0.0
 

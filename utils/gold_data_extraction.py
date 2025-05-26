@@ -2,7 +2,8 @@ import pandas as pd
 
 def load_gold_data(file_path, csv_path):
     """Load gold metadata for training examples."""
-    df = pd.read_csv(csv_path, encoding='windows-1252', header=3)
+    #df = pd.read_csv(csv_path, encoding='windows-1252', header=3)
+    df = pd.read_csv(csv_path, header=3, encoding='ISO-8859-1')
     match = df[df['Current BC Mail title'] == file_path]
 
     if match.empty:
