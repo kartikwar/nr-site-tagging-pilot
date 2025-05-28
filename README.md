@@ -18,6 +18,17 @@ For each PDF in the input folder:
 
 ---
 
+## Setup
+
+* Download project_files.zip file from teams channel.
+- Unzip the file.
+
+After unzip the folder would look like this
+
+project_files/
+├── data/  ← Copy this folder to CAPSTONE/
+├── models/  ← Copy this folder to CAPSTONE/nr-site-tagging-pilot/
+
 ## Folder Setup
 
 Your folder should look like this:
@@ -56,6 +67,7 @@ CAPSTONE/
 │   └── utils/                   ← Helper scripts (see internal README)
 
 ```
+
 ---
 
 REQUIRED LOOKUP FILES
@@ -101,11 +113,11 @@ This file is mandatory. The pipeline will not run if it is missing. Avaliable on
 
 To evaluate the accuracy of the pipeline:
 
-1.	**Place gold test PDFs in data/gold_files/**
+1. **Place gold test PDFs in data/gold_files/**
 
-2.	**Ensure gold metadata file exists at data/lookups/clean_metadata.csv**
+2. **Ensure gold metadata file exists at data/lookups/clean_metadata.csv**
 
-3.	**Run:**
+3. **Run:**
 `python evaluate.py`
 
 This will:
@@ -114,11 +126,10 @@ This will:
 - Save processed files in data/evaluation/output/
 - Log output metadata in data/evaluation/evaluation_log.csv
 - Compute and print F1, precision and recall scores for:
-   - Duplicate detection (yes vs no)
-   - Site Registry Releasable (yes vs no)
+  - Duplicate detection (yes vs no)
+  - Site Registry Releasable (yes vs no)
 
 Evaluation output is self-contained and does not modify your main output/logs folders.
-
 
 ## Output
 
