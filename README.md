@@ -24,11 +24,13 @@ For each PDF in the input folder:
 
 - Unzip the file.
 
-After unzip the folder would look like this
+After unzipping, the folder would look like this:
 
+```
 project_files/
-├── data/                         ← Copy this folder to CAPSTONE/
-├── models/                       ← Copy this folder to CAPSTONE/nr-site-tagging-pilot/
+├── data/    ← Copy this folder to CAPSTONE/
+├── models/  ← Copy this folder to CAPSTONE/nr-site-tagging-pilot/
+```
 
 ## Folder Setup
 
