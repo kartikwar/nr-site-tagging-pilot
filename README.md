@@ -32,6 +32,9 @@ project_files/
 ├── models/  ← Copy this folder to CAPSTONE/nr-site-tagging-pilot/
 ```
 
+- Clone nr-site-tagging-pilot
+```git clone https://github.com/bcgov/nr-site-tagging-pilot.git```
+
 ## Folder Setup
 
 Your folder should look like this:
