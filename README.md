@@ -20,6 +20,9 @@ For each PDF in the input folder:
 
 ## Setup
 
+- Clone nr-site-tagging-pilot
+```git clone https://github.com/bcgov/nr-site-tagging-pilot.git```
+
 - Download project_files.zip file from teams channel.
 
 - Unzip the file.
@@ -31,9 +34,6 @@ project_files/
 ├── data/    ← Copy this folder to CAPSTONE/
 ├── models/  ← Copy this folder to CAPSTONE/nr-site-tagging-pilot/
 ```
-
-- Clone nr-site-tagging-pilot
-```git clone https://github.com/bcgov/nr-site-tagging-pilot.git```
 
 ## Folder Setup
 
