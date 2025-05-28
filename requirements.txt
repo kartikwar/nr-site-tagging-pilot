@@ -1,4 +1,4 @@
-torch
+torch==2.5.1
 PyMuPDF==1.25.5
 ollama==0.4.8
 pandas==2.2.3
