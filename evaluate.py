@@ -7,6 +7,7 @@ from main import main
 from rouge_score import rouge_scorer
 import os
 from utils.checks import verify_required_dirs, verify_required_files
+from utils.gold_data_extraction import loading_gold_metadata_csv
 import config
 
 
@@ -37,8 +38,6 @@ def files_preparation():
             elif item.is_dir():
                 shutil.rmtree(item)
 
-    # Ensure log directory exists
-    config.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def normalize_columns(df, columns):
@@ -75,7 +74,7 @@ def load_evaluation_dataframe():
     """
     
     pred_df = pd.read_csv(LOG_PATH)
-    gold_df = pd.read_csv(GOLD_METADATA_PATH, header=3, encoding='ISO-8859-1')
+    gold_df = loading_gold_metadata_csv(GOLD_METADATA_PATH)
 
     # Normalize filename column for alignment
     pred_df["Original_Filename"] = pred_df["Original_Filename"].str.strip()
