@@ -30,7 +30,7 @@ def generate_new_filename(file_path: Path, site_id: str = "UNKNOWN", doc_type: s
         year_str = "0000"
 
     suffix = "-DUP" if duplicate else ""
-    base_name = f"{date_str} – {site_id} – {doc_type.upper()}{suffix}"
+    base_name = f"{date_str} - {site_id} - {doc_type.upper()}{suffix}"
     ext = file_path.suffix
     final_name = f"{base_name}{ext}"
 

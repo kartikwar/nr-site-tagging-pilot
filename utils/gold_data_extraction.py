@@ -1,9 +1,17 @@
 import pandas as pd
 
+def loading_gold_metadata_csv(csv_path):
+    """Load gold metadata csv file"""
+    
+    df = pd.read_csv(csv_path, header=3, encoding='ISO-8859-1')
+    
+    return df
+    
+
 def load_gold_data(file_path, csv_path):
     """Load gold metadata for training examples."""
-    #df = pd.read_csv(csv_path, encoding='windows-1252', header=3)
-    df = pd.read_csv(csv_path, header=3, encoding='ISO-8859-1')
+
+    df = loading_gold_metadata_csv(csv_path)
     match = df[df['Current BC Mail title'] == file_path]
 
     if match.empty:
@@ -15,7 +23,7 @@ def load_gold_data(file_path, csv_path):
         'title': str(row.get('Title/Subject', '')),
         'receiver': str(row.get('Receiver', '')),
         'sender': str(row.get('Sender/Author', '')),
-        'address': str(row.get('Address ', '')),
+        'address': str(row.get('Address', '')),
         'site_id': str(row.get('Site ID', ''))
     }
 
