@@ -80,7 +80,7 @@ def classify_with_regex(file_path):
         for kw in keywords:
             if kw in filename:
                 return doc_type
-    return "RPT"  # default fallback if nothing matches
+    return "CORR"  # default fallback if nothing matches
 
 
 def classify_with_ml(device, metadata=None):
