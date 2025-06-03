@@ -16,21 +16,8 @@ import ollama
 from collections import defaultdict
 import os
 
-# Toggle this to enable ML-based classification (if model is available)
-USE_ML_CLASSIFIER = False
 
-# Optional: load Hugging Face model if ML mode is enabled
-if USE_ML_CLASSIFIER:
-    from utils.classifier import load_huggingface_model
-    try:
-        load_huggingface_model("your-org/your-model-name")
-        print("[ML Classifier] Model loaded from Hugging Face.")
-    except Exception as e:
-        print(f"[ML Classifier] Failed to load model: {e}")
-        USE_ML_CLASSIFIER = False
-
-
-def process_file(config, file_path, flagged_for_review, site_id_address_dict):
+def process_file(config, file_path, flagged_for_review, site_id_address_dict, USE_ML_CLASSIFIER):
     try:
         # Main prompt to extract metadata fields
         prompt_path = Path("prompts/metadata_prompt.txt")
@@ -287,6 +274,8 @@ def process_file(config, file_path, flagged_for_review, site_id_address_dict):
 
 
 def main():
+    USE_ML_CLASSIFIER = True
+
     print("[Starting Pipeline Initialization]")
 
     device = (
@@ -298,8 +287,6 @@ def main():
     print(f"Using device: {device}")
 
     config.device = device
-
-    USE_ML_CLASSIFIER = True
 
     try:
         model_path = os.path.join(
@@ -361,7 +348,7 @@ def main():
 
     for file_path in files:
         process_file(config, file_path, flagged_for_review,
-                     site_id_address_dict)
+                     site_id_address_dict, USE_ML_CLASSIFIER)
 
     print("===============================================================\nThe following documents have been flagged for human review:\n===============================================================\n")
     for key, value_list in flagged_for_review.items():
