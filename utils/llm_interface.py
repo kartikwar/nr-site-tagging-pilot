@@ -112,3 +112,20 @@ def validate_and_reprompt_field(field_name, length, reprompt_path, metadata_dict
         if metadata_dict[field_name].strip().lower() != 'none' and not field_is_well_formed(metadata_dict[field_name], text, length=length):
             flagged_for_review[filename].append(field_name)
             print(f"{filename} flagged for manual review: {field_name.upper()}")
+
+def keys_are_well_formed(metadata_dict):
+    """
+    Validates that all expected keys, and only expected keys, are presented in metadata_dict.
+    
+    metadata_dict (dict): the metadata_dict object being verified."""
+
+    if metadata_dict.keys() == {
+    "site_id",
+    "title",
+    "receiver",
+    "sender",
+    "address",
+    "readable"
+    }:
+        return True
+    return False
