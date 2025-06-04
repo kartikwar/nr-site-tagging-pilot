@@ -244,9 +244,7 @@ def process_file(config, file_path, flagged_for_review, site_id_address_dict, US
 
         print("\nmetadata response:\n", metadata_dict)
         print("final site id: ", site_id)
-        gold_data = load_gold_data(filename, gold_metadata_path)
 
-        print("\ngold response:\n", gold_data)
         print('\n----\n')
 
         print("final site id:", site_id, filename)
