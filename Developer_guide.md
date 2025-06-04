@@ -183,3 +183,49 @@ NOTES:
 - Duplicate detection is conservative: relies on ROUGE and RapidFuzz.
 - Files flagged for review have uncertain or unverifiable fields.
 - Gold metadata must match filenames exactly for evaluation to work.
+
+FAQ & Troubleshooting
+=====================
+
+Q1: Why am I getting an error when loading the gold metadata CSV?
+------------------------------------------------------------------
+
+There are two common causes:
+
+
+1. CSV headers contain spaces
+-----------------------------
+Make sure none of the column headers in the gold metadata or test log files contain extra spaces. 
+For example, the column "Duplicate  (Y/N)" should be renamed to "Duplicate".
+
+Fix:
+- Open your CSV and check all header fields.
+- Remove leading/trailing spaces from column names.
+- You can also standardize them programmatically in `evaluate.py` like this:
+
+    rename_dict = {
+        "Duplicate  (Y/N)": "Duplicate",
+        ...
+    }
+
+
+2. CSV does not start from the correct header row
+--------------------------------------------------
+The evaluation script assumes the first three rows are metadata or comments, and the actual header starts on row 4 (index 3 in Python).
+
+Fix options:
+- Open the `.csv` file and make sure the actual column headers start on line 4.
+- Or, modify the code in `utils/gold_data_extraction.py` as follows:
+
+    df = pd.read_csv(csv_path, header=3, encoding='ISO-8859-1')
+
+If your header starts elsewhere, change `header=3` to match the actual row index.
+
+
+Pro Tip:
+--------
+If you see errors like “column not found” or unexpected column mismatches during evaluation, always check:
+- Filename columns match exactly (`Original_Filename` vs `Current BC Mail title`)
+- All column headers are trimmed and standardized
+- Your CSV file starts from the expected header row
+
