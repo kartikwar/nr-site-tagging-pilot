@@ -156,7 +156,7 @@ With test metadata:
 OUTPUT STRUCTURE:
 =================
 
-```plaintext
+```
 data/
 ├── input/                  ← Raw PDFs
 ├── output/                 ← Structured PDFs organized by site_id + type
@@ -171,7 +171,9 @@ data/
 │   ├── evaluation_log.csv
 │   ├── evaluation_merged_output.csv
 │   └── evaluation_summary_metrics.csv
+
 ```
+
 
 NOTES:
 ------
