@@ -155,7 +155,7 @@ With test metadata:
 
 OUTPUT STRUCTURE:
 =================
-
+`
 data/
 ├── input/                  ← Raw PDFs
 ├── output/                 ← Structured PDFs organized by site_id + type
@@ -169,7 +169,7 @@ data/
 │   ├── evaluation_log.csv
 │   ├── evaluation_merged_output.csv
 │   └── evaluation_summary_metrics.csv
-
+`
 NOTES:
 ------
 - LLM (Mistral via Ollama) is used only for fallback and metadata uncertainty.
