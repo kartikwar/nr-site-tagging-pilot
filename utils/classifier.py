@@ -17,7 +17,7 @@ DOCUMENT_TYPES = {
     "DSI": ["detailed site investigation", "dsi"],
     "COV": ["covenant", "cov"],
     "CORR": ["correspondence", "letter", "email", "corr"],
-    "REPORT": ["remediation", "report", "summary", "investigation"],
+    "RPT": ["remediation", "report", "summary", "investigation"],
 }
 
 
@@ -91,7 +91,7 @@ def classify_with_regex(file_path):
         for kw in keywords:
             if kw in filename:
                 return doc_type
-    return "REPORT"  # default fallback if nothing matches
+    return "CORR"  # default fallback if nothing matches
 
 
 def classify_with_ml(device, metadata=None):

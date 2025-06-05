@@ -35,7 +35,7 @@ def load_gold_data(file_path, csv_path):
         'title': str(row.get('Title/Subject', '')),
         'receiver': str(row.get('Receiver', '')),
         'sender': str(row.get('Sender/Author', '')),
-        'address': str(row.get('Address ', '')),
+        'address': str(row.get('Address', '')),
         'site_id': str(row.get('Site ID', ''))
     }
 

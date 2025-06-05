@@ -7,7 +7,9 @@ from main import main
 from rouge_score import rouge_scorer
 import os
 from utils.checks import verify_required_dirs, verify_required_files
+from utils.gold_data_extraction import loading_gold_metadata_csv
 import config
+import argparse
 
 
 config.INPUT_DIR = config.GOLD_FILES_DIR
@@ -41,9 +43,6 @@ def files_preparation():
                 item.unlink()
             elif item.is_dir():
                 shutil.rmtree(item)
-
-    # Ensure log directory exists
-    config.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def normalize_columns(df, columns):
@@ -95,7 +94,7 @@ def remove_prefix_labels(df, label_columns):
     return df
 
 
-def load_evaluation_dataframe():
+def load_evaluation_dataframe(gold_metadata_path=config.GOLD_METADATA_PATH):
     """
     Loads and merges gold and predicted metadata, normalizing relevant columns for evaluation.
 
@@ -104,7 +103,7 @@ def load_evaluation_dataframe():
     """
 
     pred_df = pd.read_csv(LOG_PATH)
-    gold_df = pd.read_csv(GOLD_METADATA_PATH, header=3, encoding='ISO-8859-1')
+    gold_df = loading_gold_metadata_csv(gold_metadata_path)
 
     # Normalize filename column for alignment
     pred_df["Original_Filename"] = pred_df["Original_Filename"].str.strip()
@@ -223,6 +222,7 @@ def compute_scores(merged_df):
         ('Sender_gold', 'Sender_pred'),
         ('Address_gold', 'Address_pred')
     ]
+
     recall_df = merged_df.apply(lambda row: compute_row_rouge_recalls(
         row, rouge_col_pairs, scorer), axis=1)
     merged_df = pd.concat([merged_df, recall_df], axis=1)
@@ -288,13 +288,19 @@ def compute_scores(merged_df):
 
 
 if __name__ == '__main__':
+    # Argument parsing
+    parser = argparse.ArgumentParser(
+        description="Evaluation script with optional test metadata switch.")
+    parser.add_argument('--use-test-metadata', action='store_true',
+                        help="Use 'test_metadata.csv' instead of 'clean_metadata.csv'")
+    args = parser.parse_args()
 
     # Lookup File checks, if they do not exist program shuts down gracefully
     lookups_path = config.LOOKUPS_PATH
 
-    required_files = [
-        lookups_path / "clean_metadata.csv"
-    ]
+    metadata_filename = "test_metadata.csv" if args.use_test_metadata else "clean_metadata.csv"
+    required_files = [lookups_path / metadata_filename]
+    gold_metadata_path = lookups_path / metadata_filename
 
     verify_required_files(required_files)
 
@@ -302,10 +308,15 @@ if __name__ == '__main__':
     files_preparation()
 
     # Step 2: Run the pipeline
-    main()
+    if args.use_test_metadata:
+        main(gold_metadata_path=gold_metadata_path)
+        merged_df = load_evaluation_dataframe(
+            gold_metadata_path=gold_metadata_path)
+    else:
+        main()
+        merged_df = load_evaluation_dataframe()
 
     # Step 3: Load evaluation dataframe
-    merged_df = load_evaluation_dataframe()
 
     # Step 4: Compute F1 scores
     compute_scores(merged_df)

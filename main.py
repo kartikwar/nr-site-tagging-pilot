@@ -5,7 +5,7 @@ from utils.loader import load_pdfs, extract_text_from_pdf, clean_ocr_text
 from utils.rename import generate_new_filename
 from utils.classifier import classify_document, load_huggingface_model
 from utils.file_organizer import organize_files
-from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template, field_is_well_formed, validate_and_reprompt_field
+from utils.llm_interface import query_llm, llm_single_field_query, load_prompt_template, field_is_well_formed, validate_and_reprompt_field, keys_are_well_formed
 from utils.logger import init_log, log_metadata, update_log_row
 from utils.metadata_extractor import extract_site_id_from_filename, check_duplicate_by_rouge, get_site_registry_releasable
 from utils.gold_data_extraction import load_gold_data
@@ -97,9 +97,14 @@ def process_file(config, file_path, flagged_for_review, site_id_address_dict, US
             # Querying LLM to extract metadata attributes
             metadata_dict = query_llm(prompt, model="mistral")
 
+            # Very rare errors occur with metadata_dict extraction; system automatically retries if this occurs.
+            while not keys_are_well_formed(metadata_dict):
+                print("Metadata dictionary malformed. Retrying...")
+                metadata_dict = query_llm(prompt, model="mistral")
+
             # If title extraction fails on a readable document, assume metadata extraction has failed entirely. Make up to 5 re-attempts to extract metadata.
             metadata_retries = 0
-            while metadata_dict['title'].strip() and metadata_dict['title'].lower() == 'none' and not metadata_dict['readable'].strip().lower() == 'no' and metadata_retries < 5:
+            while keys_are_well_formed(metadata_dict) and metadata_dict['title'].lower() == 'none' and not metadata_dict['readable'].strip().lower() == 'no' and metadata_retries < 5:
                 print(
                     f"Retrying metadata extraction, attempt {metadata_retries + 1}/5")
                 metadata_dict = query_llm(prompt, model="mistral")
@@ -271,9 +276,7 @@ def process_file(config, file_path, flagged_for_review, site_id_address_dict, US
 
         print("\nmetadata response:\n", metadata_dict)
         print("final site id: ", site_id)
-        gold_data = load_gold_data(
-            filename, '../data/lookups/clean_metadata.csv')
-        print("\ngold response:\n", gold_data)
+
         print('\n----\n')
 
         print("final site id:", site_id, filename)
@@ -330,7 +333,7 @@ def main(gold_metadata_path='../data/lookups/clean_metadata.csv'):
     USE_ML_CLASSIFIER = True
 
     print("[Starting Pipeline Initialization]")
-
+    USE_ML_CLASSIFIER = True
     device = (
         torch.device("mps") if torch.backends.mps.is_available()
         else torch.device("cuda") if torch.cuda.is_available()

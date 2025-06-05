@@ -200,3 +200,37 @@ def validate_and_reprompt_field(field_name, length, reprompt_path, metadata_dict
         if metadata_dict[field_name].strip().lower() != 'none' and not field_is_well_formed(metadata_dict[field_name], text, length=length):
             flagged_for_review[filename].append(field_name)
             print(f"{filename} flagged for manual review: {field_name.upper()}")
+
+
+def keys_are_well_formed(metadata_dict):
+    """
+    Validates that `metadata_dict` contains exactly the expected keys.
+
+    This function checks whether the dictionary has all and only the following keys:
+    - "site_id"
+    - "title"
+    - "receiver"
+    - "sender"
+    - "address"
+    - "readable"
+
+    Parameters:
+    ----------
+    metadata_dict : dict
+        Dictionary containing extracted metadata fields from an LLM or parser.
+
+    Returns:
+    -------
+    bool
+        True if all and only expected keys are present; False otherwise.
+    """
+    if metadata_dict.keys() == {
+        "site_id",
+        "title",
+        "receiver",
+        "sender",
+        "address",
+        "readable"
+    }:
+        return True
+    return False
