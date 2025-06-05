@@ -1,6 +1,26 @@
 import pandas as pd
 
 
+def loading_gold_metadata_csv(csv_path):
+    """
+    Loads the gold metadata CSV file containing annotated document information.
+
+    Parameters:
+    ----------
+    csv_path : str or pathlib.Path
+        Path to the gold metadata CSV file.
+
+    Returns:
+    -------
+    pandas.DataFrame
+        DataFrame containing the loaded gold metadata.
+    """
+
+    df = pd.read_csv(csv_path, header=3, encoding='ISO-8859-1')
+
+    return df
+
+
 def load_gold_data(file_path, csv_path):
     """
     Loads gold-standard metadata for a given file based on its name.
