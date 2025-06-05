@@ -21,11 +21,16 @@ def files_preparation():
     """
     Clears all contents in EVALUATION_DIR except the 'output' folder.
     Recreates necessary log directory structure if missing.
+
+    Returns:
+    -------
+    None
     """
 
     # 🔐 Safety guard to avoid dangerous deletion
     if "evaluation" not in str(config.EVALUATION_DIR).lower():
-        raise RuntimeError(f"Aborting: EVALUATION_DIR '{config.EVALUATION_DIR}' does not appear safe to wipe.")
+        raise RuntimeError(
+            f"Aborting: EVALUATION_DIR '{config.EVALUATION_DIR}' does not appear safe to wipe.")
 
     # Delete everything inside EVALUATION_DIR except 'output'
     if config.EVALUATION_DIR.exists():
@@ -44,6 +49,20 @@ def files_preparation():
 def normalize_columns(df, columns):
     """
     Lowercases and strips whitespace from gold and predicted versions of specified columns.
+
+    Parameters:
+    ----------
+    df : pandas.DataFrame
+        The DataFrame containing the columns to normalize.
+    columns : list of str
+        List of base column names. For each base name, the function processes 
+        the '<column>_gold' and '<column>_pred' columns.
+
+    Returns:
+    -------
+    pandas.DataFrame
+        The DataFrame with normalized '_gold' and '_pred' columns.
+
     """
     for column in columns:
         df[column + "_gold"] = df[column + "_gold"].str.lower().str.strip()
@@ -55,25 +74,35 @@ def normalize_columns(df, columns):
 def remove_prefix_labels(df, label_columns):
     """
     Removes leading labels (e.g., 'receiver:', 'sender:') with optional whitespace and colon from both gold and predicted columns.
+    Parameters:
+    ----------
+    df : pandas.DataFrame
+        The DataFrame containing the labeled columns.
+    label_columns : list of str
+        List of base label names to process (e.g., ['receiver', 'sender']).
+
+    Returns:
+    -------
+    pandas.DataFrame
+        The DataFrame with cleaned '_gold' and '_pred' label columns.
     """
     for column in label_columns:
         pattern = rf"^{column.lower()}\s*:\s*"  # e.g., "receiver\s*:\s*"
         for suffix in ["_gold", "_pred"]:
             full_col = column + suffix
             df[full_col] = df[full_col].str.replace(pattern, "", regex=True)
-            
-    return df
 
+    return df
 
 
 def load_evaluation_dataframe():
     """
     Loads and merges gold and predicted metadata, normalizing relevant columns for evaluation.
-    
+
     Returns:
         pd.DataFrame: Cleaned and merged evaluation DataFrame.
     """
-    
+
     pred_df = pd.read_csv(LOG_PATH)
     gold_df = pd.read_csv(GOLD_METADATA_PATH, header=3, encoding='ISO-8859-1')
 
@@ -110,7 +139,8 @@ def load_evaluation_dataframe():
 
     # Normalize Duplicate_pred from prediction strings to 'yes'/'no'
     merged_df["Duplicate_pred"] = merged_df["Duplicate_pred"].astype(str).str.strip().str.lower().map(
-        lambda x: "yes" if x in ["contained", "likely_duplicate_ocr", "yes"] else "no"
+        lambda x: "yes" if x in ["contained",
+                                 "likely_duplicate_ocr", "yes"] else "no"
     )
 
     # Normalize Site_Registry_Releaseable columns
@@ -137,12 +167,23 @@ def load_evaluation_dataframe():
     return merged_df
 
 
-
 def compute_row_rouge_recalls(row, col_pairs, scorer):
     """
     Calculates ROUGE-1 recall for each (gold, pred) text column pair in a row.
 
-    Returns a Series with recall scores named as '{attribute}_recall'.
+    Parameters:
+    ----------
+    row : pandas.Series
+        A single row from a DataFrame, containing gold and predicted text columns.
+    col_pairs : list of tuple(str, str)
+        List of tuples, where each tuple is (gold_column_name, pred_column_name).
+    scorer : rouge_score.rouge_scorer.RougeScorer
+        A ROUGE scorer instance, typically initialized with `use_stemmer=True`.
+
+    Returns:
+    -------
+    pandas.Series
+        A Series containing recall scores for each attribute in the format '{attribute}_recall'.
     """
     results = {}
     for gold_col, pred_col in col_pairs:
@@ -160,6 +201,17 @@ def compute_scores(merged_df):
     """
     Compute ROUGE-1 recall for text fields and classification metrics (F1, precision, recall)
     for discrete labels. Saves two output files: a detailed row-level output and a summary.
+
+    Parameters:
+    ----------
+    merged_df : pandas.DataFrame
+        DataFrame containing side-by-side gold and predicted columns, e.g., 
+        'Title_gold', 'Title_pred', 'Duplicate_gold', 'Duplicate_pred', etc.
+
+    Returns:
+    -------
+    None
+        Writes results to disk. Outputs are saved in `config.EVALUATION_DIR`.
     """
     # -----------------------
     # Compute ROUGE-1 recalls
@@ -171,7 +223,8 @@ def compute_scores(merged_df):
         ('Sender_gold', 'Sender_pred'),
         ('Address_gold', 'Address_pred')
     ]
-    recall_df = merged_df.apply(lambda row: compute_row_rouge_recalls(row, rouge_col_pairs, scorer), axis=1)
+    recall_df = merged_df.apply(lambda row: compute_row_rouge_recalls(
+        row, rouge_col_pairs, scorer), axis=1)
     merged_df = pd.concat([merged_df, recall_df], axis=1)
 
     # ----------------------------------
@@ -181,8 +234,9 @@ def compute_scores(merged_df):
     for attr in ['Duplicate', 'Site_Registry_Releaseable']:
         y_true = merged_df[f"{attr}_gold"]
         y_pred = merged_df[f"{attr}_pred"]
-        f1 = f1_score(y_true, y_pred, pos_label="yes", zero_division=1) 
-        prec = precision_score(y_true, y_pred, pos_label="yes", zero_division=1)
+        f1 = f1_score(y_true, y_pred, pos_label="yes", zero_division=1)
+        prec = precision_score(
+            y_true, y_pred, pos_label="yes", zero_division=1)
         rec = recall_score(y_true, y_pred, pos_label="yes", zero_division=1)
 
         class_metrics[attr] = {
@@ -200,7 +254,8 @@ def compute_scores(merged_df):
     # ----------------------------
     # Save row-level evaluation
     # ----------------------------
-    merged_df.to_csv(config.EVALUATION_DIR / "evaluation_merged_output.csv", index=False)
+    merged_df.to_csv(config.EVALUATION_DIR /
+                     "evaluation_merged_output.csv", index=False)
 
     # ------------------------------------
     # Save summary metrics (aggregated)
@@ -228,23 +283,21 @@ def compute_scores(merged_df):
         })
 
     summary_df = pd.DataFrame(summary_data)
-    summary_df.to_csv(config.EVALUATION_DIR / "evaluation_summary_metrics.csv", index=False)
-
+    summary_df.to_csv(config.EVALUATION_DIR /
+                      "evaluation_summary_metrics.csv", index=False)
 
 
 if __name__ == '__main__':
 
-    
-    
     # Lookup File checks, if they do not exist program shuts down gracefully
     lookups_path = config.LOOKUPS_PATH
-    
+
     required_files = [
         lookups_path / "clean_metadata.csv"
     ]
 
     verify_required_files(required_files)
-    
+
     # Step 1: Prepare files
     files_preparation()
 
