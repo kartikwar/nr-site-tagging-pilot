@@ -149,9 +149,15 @@ Normal Mode:
 Evaluation Mode:
 ----------------
 > python evaluate.py
+- Evaluates on _training_ data by default. This mode will utilize `data/lookups/clean_metadata.csv` as the gold data.
+- Ensure that your training pdf files are in `data/gold_files`, and that all filenames match exactly with the `Current BC Mail Title` column of `clean_metadata.csv`.
 
-With test metadata:
+<br>
+<br>
+
 > python evaluate.py --use-test-metadata
+- Evaluates on _test/validation_ data. This mode will utilize `data/lookups/test_metadata.csv` as the gold data.
+- Ensure that your test/validation pdf files are in `data/gold_files`, and that all filenames match exactly with the `Current BC Mail Title` column of `test_metadata.csv`.
 
 OUTPUT STRUCTURE:
 =================
@@ -164,7 +170,8 @@ data/
 ├── lookups/                ← Required reference data
 │   ├── site_ids.csv
 │   ├── site_registry_mapping.xlsx
-│   └── clean_metadata.csv
+│   ├── clean_metadata.csv
+|   └── test_metadata.csv
 ├── gold_files/             ← Files used for eval mode
 ├── evaluation/             ← Temp eval results
 │   ├── output/             ← Structured PDFs organized by site_id + type of Test dataset
@@ -177,11 +184,11 @@ data/
 
 NOTES:
 ------
-- LLM (Mistral via Ollama) is used only for fallback and metadata uncertainty.
-- All metadata fields have fallback: site ID via regex or LLM; address via CSV or cached dict.
+- The LLM (Mistral via Ollama) is used primarily for title, sender, and receiver extraction, and to determine readability. It is only used for Site ID and Address if those fields cannot be recovered from the filename or CSV registry.
+- Files with less than 50 total readable tokens are assumed to be unreadable and are flagged automatically for review. This prevents model hallucinations.
 - Classification model (BERT) is optional and fallback is regex.
 - Duplicate detection is conservative: relies on ROUGE and RapidFuzz.
-- Files flagged for review have uncertain or unverifiable fields.
+- Files flagged for review have uncertain or unverifiable fields, and will be listed on-screen when the pipeline finishes.
 - Gold metadata must match filenames exactly for evaluation to work.
 
 FAQ & Troubleshooting
