@@ -18,6 +18,38 @@ import os
 
 
 def process_file(config, file_path, flagged_for_review, site_id_address_dict, USE_ML_CLASSIFIER, gold_metadata_path):
+    """
+    Processes a single PDF document to extract and log structured metadata.
+
+    This function performs the following operations:
+    - Extracts site ID from filename or LLM.
+    - Extracts and cleans text from the first 8 pages of the PDF.
+    - Uses an LLM to extract metadata (title, sender, receiver, address).
+    - Validates and re-prompts metadata fields if necessary.
+    - Attempts to classify the document type using ML or regex.
+    - Checks for duplicates using ROUGE + RapidFuzz.
+    - Generates a new filename and organizes the file.
+    - Logs extracted metadata for auditability.
+
+    Parameters:
+    ----------
+    config : module
+        Global configuration module with paths and device settings.
+    file_path : pathlib.Path
+        Path to the PDF file to be processed.
+    flagged_for_review : dict
+        Dictionary storing filenames and fields flagged for manual review.
+    site_id_address_dict : dict
+        Dictionary to store site_id to address mappings for reuse.
+    USE_ML_CLASSIFIER : bool
+        Whether to use ML classifier for document type classification.
+    gold_metadata_path : str
+        Path to gold metadata (optional, not actively used here).
+
+    Returns:
+    -------
+    None
+    """
     try:
         # Main prompt to extract metadata fields
         prompt_path = Path("prompts/metadata_prompt.txt")
@@ -275,7 +307,31 @@ def process_file(config, file_path, flagged_for_review, site_id_address_dict, US
     except Exception as ex:
         print(f'exception {ex} in {file_path}')
 
+
 def main(gold_metadata_path='../data/lookups/clean_metadata.csv'):
+    """
+    Main entry point for the document processing pipeline.
+
+    This function:
+    - Loads the ML model if enabled.
+    - Initializes paths, devices, and required file/directory checks.
+    - Scans input directory for PDF files.
+    - Processes each file using `process_file`.
+    - Outputs files into organized folders.
+    - Flags low-confidence or failed extractions for human review.
+
+    Parameters:
+    ----------
+    gold_metadata_path : str, optional
+        Path to CSV containing clean gold metadata (default is in lookups dir).
+
+    Returns:
+    -------
+    None
+    """
+    print("[Starting Pipeline Initialization]")
+    USE_ML_CLASSIFIER = True
+
     print("[Starting Pipeline Initialization]")
     USE_ML_CLASSIFIER = True
     device = (

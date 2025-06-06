@@ -29,12 +29,23 @@ DOCUMENT_CLASS_NAMES = ['AIP', 'COA', 'COC', 'CORR', 'COV', 'CSSA', 'DSI', 'FDET
 def load_huggingface_model(model_name, device):
     """
     Loads a Hugging Face transformer model and tokenizer for document classification.
-    
+
     Parameters:
-        model_name (str): Path to the pre-trained model on Hugging Face Hub.
-    
+    ----------
+    model_name : str
+        Name or path of the pretrained model to load.
+    device : torch.device
+        The device (CPU/GPU) to move the model to.
+
     Side Effects:
-        Sets global `hf_tokenizer` and `hf_model` for use in ML classification.
+    -------------
+    Sets global variables:
+    - hf_tokenizer: The loaded tokenizer.
+    - hf_model: The loaded model in evaluation mode.
+
+    Returns
+    -------------
+    None
     """
     global hf_tokenizer, hf_model
     hf_tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -46,12 +57,12 @@ def load_huggingface_model(model_name, device):
 def classify_document(file_path, device, metadata=None, mode="regex"):
     """
     Classifies a document either using a regex-based method or a transformer-based ML model.
-    
+
     Parameters:
         file_path (Path): Path to the document file.
         metadata (dict): Optional dictionary containing extracted metadata (used by ML).
         mode (str): Classification mode: "regex" (default) or "ml".
-    
+
     Returns:
         str: Predicted document type label (e.g., "REPORT", "PSI").
     """
@@ -67,10 +78,10 @@ def classify_document(file_path, device, metadata=None, mode="regex"):
 def classify_with_regex(file_path):
     """
     Classifies a document by checking for keyword matches in the filename.
-    
+
     Parameters:
         file_path (Path): Path to the document file.
-    
+
     Returns:
         str: Document type label if matched; otherwise, "REPORT" as fallback.
     """
@@ -86,14 +97,14 @@ def classify_with_regex(file_path):
 def classify_with_ml(device, metadata=None):
     """
     Classifies a document using a fine-tuned Hugging Face transformer model.
-    
+
     Parameters:
         file_path (Path): Path to the document file (not used in this method).
         metadata (dict): Dictionary containing at least a "title" field for classification.
-    
+
     Returns:
         str: Predicted document type label (from label encoder or index).
-    
+
     Raises:
         ValueError: If the Hugging Face model/tokenizer is not loaded.
     """
