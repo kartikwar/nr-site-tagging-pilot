@@ -329,8 +329,6 @@ def main(gold_metadata_path='../data/lookups/clean_metadata.csv'):
     -------
     None
     """
-    print("[Starting Pipeline Initialization]")
-    USE_ML_CLASSIFIER = True
 
     print("[Starting Pipeline Initialization]")
     USE_ML_CLASSIFIER = True
