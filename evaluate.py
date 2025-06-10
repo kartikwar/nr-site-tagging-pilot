@@ -304,6 +304,20 @@ if __name__ == '__main__':
 
     verify_required_files(required_files)
 
+    # Step 0: ensure some filenames match between Gold CSV and input directory. If not, notify user and exit early.
+
+    # Extract all filenames (with extensions) from INPUT_DIR.
+    input_filenames = {f.name.strip() for f in config.INPUT_DIR.iterdir() if f.is_file()}
+    # Load gold metadata and extract gold titles.
+    gold_df = loading_gold_metadata_csv(gold_metadata_path)
+    gold_titles = set(gold_df["Current BC Mail title"].astype(str).str.strip())
+    # Check for matches and exit if there are none.
+    matching_filenames = input_filenames & gold_titles
+    if not matching_filenames:
+        print("❌ No matching filenames found between input directory files and Gold CSV.")
+        print(f"Input directory:\n{config.INPUT_DIR}\nGold CSV:\n{gold_metadata_path}.\nExiting...")
+        exit(0)
+
     # Step 1: Prepare files
     files_preparation()
 
